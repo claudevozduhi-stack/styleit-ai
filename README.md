@@ -17,7 +17,7 @@
 Нужны Python 3.12+ и Node.js 22+.
 
 ```bash
-cp .env.example backend/.env          # и вписать ANTHROPIC_API_KEY
+cp .env.example backend/.env          # и вписать GEMINI_API_KEY
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -39,7 +39,7 @@ cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ## Деплой
 
 - Бэкенд: Render → New Web Service → Docker, Dockerfile `backend/Dockerfile`, корень сборки — корень репозитория.
-  Переменные: `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`, `CORS_ORIGINS` (адрес фронтенда).
+  Переменные: `GEMINI_API_KEY`, `GEMINI_MODEL`, `CORS_ORIGINS` (адрес фронтенда).
 - Фронтенд: Vercel → корень `frontend`, переменная `VITE_API_URL` (адрес бэкенда).
 
 ## Лицензия
