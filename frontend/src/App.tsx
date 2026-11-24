@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { CapsulePage } from './pages/CapsulePage'
 import { ColorTypePage } from './pages/ColorTypePage'
+import { FittingRoomPage } from './pages/FittingRoomPage'
 import { HomePage } from './pages/HomePage'
 import { MeasurementsPage } from './pages/MeasurementsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/color-type" element={<ColorTypePage />} />
         <Route path="/style" element={<StylePage />} />
         <Route path="/capsule" element={<CapsulePage />} />
+        <Route path="/fitting/:productId" element={<FittingRoomPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="*" element={<p>Страница не найдена.</p>} />
       </Routes>

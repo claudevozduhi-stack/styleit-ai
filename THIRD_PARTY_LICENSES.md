@@ -26,7 +26,7 @@
 | React Router | MIT | https://github.com/remix-run/react-router |
 | TanStack Query | MIT | https://github.com/TanStack/query |
 | three.js | MIT | https://github.com/mrdoob/three.js |
-| @react-three/fiber, @react-three/drei | MIT | https://github.com/pmndrs |
+| @react-three/fiber | MIT | https://github.com/pmndrs/react-three-fiber |
 | Tailwind CSS | MIT | https://github.com/tailwindlabs/tailwindcss |
 | Lucide (иконки) | ISC | https://github.com/lucide-icons/lucide |
 | Vite | MIT | https://github.com/vitejs/vite |
