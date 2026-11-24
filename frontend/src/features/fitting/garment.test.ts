@@ -4,9 +4,9 @@ import type { SizeOption } from '../../types/analysis'
 import type { Measurements } from '../../types/body'
 import { ellipseForGirth, ramanujanPerimeter } from '../avatar/ellipse'
 import type { LoftRing } from '../avatar/loft'
-import { buildBodyModel } from '../avatar/sections'
+import { buildBodyModel, sectionAt } from '../avatar/sections'
 import { FIT_HEX, hexToRgb } from './colors'
-import { MIN_CLEARANCE_CM, buildGarment, easeAt, zoneEases } from './garment'
+import { MIN_CLEARANCE_CM, buildGarment, easeAt, foldDepthFor, zoneEases } from './garment'
 import { bodyMeshes, garmentMeshes } from './scene'
 
 const measurements: Measurements = {
@@ -128,5 +128,39 @@ describe('scene meshes', () => {
     expect(bodyMeshes(body)).toHaveLength(5)
     const parts = buildGarment(body, 'jeans', option('M', 0, 'good'), '#223344', 'fit')
     expect(garmentMeshes(parts)).toHaveLength(parts.length)
+  })
+})
+
+describe('реалистичность ткани', () => {
+  it('складок нет в обтяжку и больше у свободной вещи', () => {
+    expect(foldDepthFor(1)).toBe(0)
+    expect(foldDepthFor(12)).toBeGreaterThan(foldDepthFor(6))
+    expect(foldDepthFor(100)).toBeLessThanOrEqual(1.5)
+  })
+
+  it('ни одна деталь туловища не уже тела на той же высоте', () => {
+    const categories = [
+      'tshirt',
+      'shirt',
+      'hoodie',
+      'jacket',
+      'trousers',
+      'jeans',
+      'skirt',
+      'dress',
+    ] as const
+    for (const category of categories) {
+      const torso = buildGarment(
+        body,
+        category,
+        option('XS', -20, 'tight'),
+        '#ffffff',
+        'product',
+      )[0]!
+      for (const ring of torso.rings) {
+        const bodyGirth = sectionAt(body.parts.torso.sections, ring.y).girth
+        expect(girthOf(ring)).toBeGreaterThanOrEqual(bodyGirth)
+      }
+    }
   })
 })

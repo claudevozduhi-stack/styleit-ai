@@ -18,6 +18,12 @@ export function bodyMeshes(body: BodyModel): MeshData[] {
 /** Сетки вещи: каждая деталь — открытая «труба» из колец. */
 export function garmentMeshes(parts: GarmentPart[]): MeshData[] {
   return parts.map((part) =>
-    loftMesh(part.rings, { ...DEFAULT_LOFT, capBottom: part.capBottom, capTop: part.capTop }),
+    loftMesh(part.rings, {
+      ...DEFAULT_LOFT,
+      capBottom: part.capBottom,
+      capTop: part.capTop,
+      foldCount: part.foldCount,
+      edgeThickness: part.edgeThickness,
+    }),
   )
 }

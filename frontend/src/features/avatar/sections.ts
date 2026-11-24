@@ -3,7 +3,8 @@
 // обхваты груди, талии и бёдер из мерок, потому что именно по ним подбирается размер.
 import type { BodyZone } from '../../types/analysis'
 import type { Measurements } from '../../types/body'
-import { ramanujanPerimeter } from './ellipse'
+import { buildArm, buildLandmarks, buildLeg, buildTorso, shoulderHalfWidth } from './bodyParts'
+import { NO_FEATURES, type Features } from './profile'
 
 /** Горизонтальное сечение части тела. Все величины в сантиметрах, y — высота от пола. */
 export interface Section {
@@ -13,6 +14,10 @@ export interface Section {
   depthRatio: number
   /** Смещение центра сечения по оси X (для ног и рук). */
   centerX: number
+  /** Смещение центра по оси Z (вперёд), например у стоп и шеи. По умолчанию 0. */
+  centerZ?: number
+  /** Анатомические выпуклости сечения; по умолчанию их нет. */
+  features?: Features
   /** Зона размерной сетки, которой соответствует сечение. */
   zone?: BodyZone
 }
@@ -46,110 +51,15 @@ export interface Landmarks {
 export interface BodyModel {
   heightCm: number
   parts: Record<PartName, BodyPart>
-  head: { y: number; radius: number }
+  /** Голова — эллипсоид без черт лица: центр и радиус. */
+  head: { y: number; z: number; radius: number }
   landmarks: Landmarks
-}
-
-/** Отношения глубины к ширине для груди, талии и бёдер у женской и мужской фигуры. */
-const DEPTH_RATIOS = {
-  female: { chest: 0.75, waist: 0.72, hips: 0.78 },
-  male: { chest: 0.68, waist: 0.75, hips: 0.72 },
-} as const
-
-/** Ширина плеч по умолчанию как доля роста, если мерка не указана. */
-const DEFAULT_SHOULDER_SHARE = { female: 0.21, male: 0.23 } as const
-
-/** Полуширина эллипса с данным обхватом и отношением осей. */
-function halfWidth(girth: number, depthRatio: number): number {
-  return girth / ramanujanPerimeter(1, depthRatio)
-}
-
-/** Высоты уровней тела. Промежность берётся из длины ноги по шву, если она указана. */
-export function buildLandmarks(m: Measurements): Landmarks {
-  const h = m.heightCm
-  // Длина по шву ограничена разумной долей роста, чтобы манекен не ломался на крайних мерках.
-  const crotchY = Math.min(Math.max(m.inseamCm ?? 0.46 * h, 0.4 * h), 0.49 * h)
-  return {
-    ankleY: 0.045 * h,
-    kneeY: crotchY * 0.57,
-    crotchY,
-    hipsY: crotchY + 0.05 * h,
-    waistY: 0.62 * h,
-    chestY: 0.72 * h,
-    armpitY: 0.765 * h,
-    shoulderY: 0.815 * h,
-    neckBaseY: 0.835 * h,
-    neckTopY: 0.87 * h,
-    elbowY: 0.62 * h,
-    wristY: 0.485 * h,
-  }
-}
-
-/** Сечения туловища от промежности до шеи; грудь, талия и бёдра равны меркам. */
-function buildTorso(m: Measurements, l: Landmarks, shoulderHalf: number): Section[] {
-  const r = DEPTH_RATIOS[m.gender]
-  const underbust = m.waistCm + (m.chestCm - m.waistCm) * 0.6
-  const neckGirth = m.chestCm * 0.37
-  // Плечевое сечение задаётся шириной плеч: полуось X чуть меньше половины ширины плеч.
-  const shoulderA = shoulderHalf * 0.92
-  const shoulderB = halfWidth(m.chestCm, r.chest) * r.chest * 0.8
-  const rows: Array<[number, number, number, BodyZone?]> = [
-    // Низ туловища сужается между ногами, чтобы не было «ступеньки» на стыке с бёдрами.
-    [l.crotchY - 0.015 * m.heightCm, m.hipsCm * 0.5, 0.8],
-    [l.crotchY, m.hipsCm * 0.75, 0.75],
-    [l.hipsY, m.hipsCm, r.hips, 'hips'],
-    [(l.hipsY + l.waistY) / 2, (m.hipsCm + m.waistCm) / 2, (r.hips + r.waist) / 2],
-    [l.waistY, m.waistCm, r.waist, 'waist'],
-    [(l.waistY + l.chestY) / 2, underbust, (r.waist + r.chest) / 2],
-    [l.chestY, m.chestCm, r.chest, 'chest'],
-    [l.armpitY, m.chestCm * 0.97, r.chest * 0.95],
-    [l.shoulderY, ramanujanPerimeter(shoulderA, shoulderB), shoulderB / shoulderA],
-    [l.neckBaseY, neckGirth, 0.9],
-    [l.neckTopY, neckGirth, 0.9],
-  ]
-  return rows.map(([y, girth, depthRatio, zone]) => ({ y, girth, depthRatio, centerX: 0, zone }))
-}
-
-/** Сечения одной ноги от стопы до верха бедра; side = −1 для левой, +1 для правой. */
-function buildLeg(m: Measurements, l: Landmarks, side: number): Section[] {
-  const hipsHalf = halfWidth(m.hipsCm, DEPTH_RATIOS[m.gender].hips)
-  const top = hipsHalf * 0.48
-  const bottom = hipsHalf * 0.42
-  const c = l.crotchY
-  const rows: Array<[number, number, number, number]> = [
-    [0, m.hipsCm * 0.24, 1.3, bottom],
-    [l.ankleY, m.hipsCm * 0.22, 1, bottom],
-    [c * 0.25, m.hipsCm * 0.27, 1, bottom],
-    [c * 0.4, m.hipsCm * 0.37, 0.95, (top + bottom) / 2],
-    [l.kneeY, m.hipsCm * 0.36, 0.95, (top + bottom) / 2],
-    [c * 0.72, m.hipsCm * 0.46, 0.95, top],
-    [c * 0.87, m.hipsCm * 0.53, 0.95, top],
-    [c, m.hipsCm * 0.58, 0.95, top],
-    [c + 0.03 * m.heightCm, m.hipsCm * 0.6, 0.95, top],
-  ]
-  return rows.map(([y, girth, depthRatio, x]) => ({ y, girth, depthRatio, centerX: side * x }))
-}
-
-/** Сечения одной руки от кончиков пальцев до плеча, руки слегка отведены в стороны. */
-function buildArm(m: Measurements, l: Landmarks, side: number, shoulderHalf: number): Section[] {
-  const upperArm = m.chestCm * 0.3
-  const x = shoulderHalf + (upperArm / (2 * Math.PI)) * 0.6
-  const rows: Array<[number, number, number, number]> = [
-    [0.4 * m.heightCm, m.chestCm * 0.12, 0.5, x + 4],
-    [0.44 * m.heightCm, m.chestCm * 0.22, 0.45, x + 3.5],
-    [l.wristY, m.chestCm * 0.17, 0.7, x + 3],
-    [l.elbowY, m.chestCm * 0.25, 0.9, x + 1.5],
-    [l.armpitY, upperArm, 0.9, x],
-    [l.shoulderY, upperArm * 0.95, 0.9, x - 1],
-    [l.shoulderY + 0.012 * m.heightCm, upperArm * 0.55, 0.9, x - 2],
-  ]
-  return rows.map(([y, girth, depthRatio, cx]) => ({ y, girth, depthRatio, centerX: side * cx }))
 }
 
 /** Строит модель манекена по меркам пользователя. */
 export function buildBodyModel(m: Measurements): BodyModel {
   const landmarks = buildLandmarks(m)
-  const shoulderHalf = (m.shouldersCm ?? DEFAULT_SHOULDER_SHARE[m.gender] * m.heightCm) / 2
+  const shoulderHalf = shoulderHalfWidth(m)
   const limb = (sections: Section[]): BodyPart => ({ sections, capBottom: true, capTop: true })
   return {
     heightCm: m.heightCm,
@@ -160,8 +70,24 @@ export function buildBodyModel(m: Measurements): BodyModel {
       leftArm: limb(buildArm(m, landmarks, -1, shoulderHalf)),
       rightArm: limb(buildArm(m, landmarks, 1, shoulderHalf)),
     },
-    head: { y: 0.935 * m.heightCm, radius: 0.06 * m.heightCm },
+    head: { y: 0.932 * m.heightCm, z: 1.5, radius: 0.06 * m.heightCm },
     landmarks,
+  }
+}
+
+/** Смешивает выпуклости двух сечений (отсутствие = нули). */
+function mixSectionFeatures(
+  from: Features | undefined,
+  to: Features | undefined,
+  t: number,
+): Features {
+  const a = from ?? NO_FEATURES
+  const b = to ?? NO_FEATURES
+  return {
+    bust: lerp(a.bust, b.bust, t),
+    buttocks: lerp(a.buttocks, b.buttocks, t),
+    shoulderBlades: lerp(a.shoulderBlades, b.shoulderBlades, t),
+    belly: lerp(a.belly, b.belly, t),
   }
 }
 
@@ -186,6 +112,8 @@ export function sectionAt(sections: Section[], y: number): Section {
     girth: lerp(lower.girth, upper.girth, t),
     depthRatio: lerp(lower.depthRatio, upper.depthRatio, t),
     centerX: lerp(lower.centerX, upper.centerX, t),
+    centerZ: lerp(lower.centerZ ?? 0, upper.centerZ ?? 0, t),
+    features: mixSectionFeatures(lower.features, upper.features, t),
   }
 }
 

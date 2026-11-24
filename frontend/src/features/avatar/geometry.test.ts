@@ -99,22 +99,45 @@ describe('sliceSections', () => {
 describe('loftMesh', () => {
   const sections = buildBodyModel(measurements).parts.torso.sections
   const rings = sections.map((s) => toRing(s, [1, 1, 1]))
+  const ringCount = (rings.length - 1) * DEFAULT_LOFT.stepsPerSpan + 1
+  // У каждого кольца на одну вершину больше: дубль шва для развёртки фактуры.
+  const columns = DEFAULT_LOFT.radialSegments + 1
 
-  it('строит согласованные вершины, цвета и индексы', () => {
+  it('строит согласованные вершины, нормали, цвета, развёртку и индексы', () => {
     const mesh = loftMesh(rings, { ...DEFAULT_LOFT, capBottom: true, capTop: true })
-    const ringCount = (rings.length - 1) * DEFAULT_LOFT.stepsPerSpan + 1
-    const vertexCount = ringCount * DEFAULT_LOFT.radialSegments + 2
+    const vertexCount = ringCount * columns + 2
     expect(mesh.positions.length).toBe(vertexCount * 3)
+    expect(mesh.normals.length).toBe(vertexCount * 3)
     expect(mesh.colors.length).toBe(vertexCount * 3)
+    expect(mesh.uvs.length).toBe(vertexCount * 2)
     expect(Math.max(...mesh.indices)).toBe(vertexCount - 1)
     expect(mesh.indices.length % 3).toBe(0)
   })
 
-  it('кольцо на уровне груди сохраняет обхват из мерок', () => {
+  it('нормали единичные и смотрят наружу от оси туловища', () => {
+    const mesh = loftMesh(rings)
+    const chestRing = sections.findIndex((s) => s.zone === 'chest') * DEFAULT_LOFT.stepsPerSpan
+    for (let k = 0; k < DEFAULT_LOFT.radialSegments; k += 1) {
+      const i = (chestRing * columns + k) * 3
+      const [x, z] = [mesh.positions[i] as number, mesh.positions[i + 2] as number]
+      const [nx, ny, nz] = [mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]] as number[]
+      expect(Math.hypot(nx!, ny!, nz!)).toBeCloseTo(1, 5)
+      expect(x * nx! + z * nz!).toBeGreaterThan(0)
+    }
+  })
+
+  it('кольцо на уровне груди сохраняет обхват из мерок, несмотря на выпуклости', () => {
     const segments = 200
     const mesh = loftMesh(rings, { ...DEFAULT_LOFT, radialSegments: segments })
     const chestIndex = sections.findIndex((s) => s.zone === 'chest')
     const ringIndex = chestIndex * DEFAULT_LOFT.stepsPerSpan
-    expect(ringPerimeter(mesh.positions, ringIndex * segments, segments)).toBeCloseTo(90, 0)
+    expect(sections[chestIndex]?.features?.bust).toBeGreaterThan(0)
+    expect(ringPerimeter(mesh.positions, ringIndex * (segments + 1), segments)).toBeCloseTo(90, 0)
+  })
+
+  it('подгиб ткани добавляет по кольцу на открытых краях', () => {
+    const plain = loftMesh(rings)
+    const hemmed = loftMesh(rings, { ...DEFAULT_LOFT, edgeThickness: 0.6 })
+    expect(hemmed.positions.length - plain.positions.length).toBe(2 * columns * 3)
   })
 })
