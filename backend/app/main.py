@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from app.api import catalog, health
+from app.api import analysis, catalog, health, size
 from app.core.config import Settings, get_settings
 from app.core.security import install_security
 
@@ -22,6 +22,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_security(app, settings)
     app.include_router(health.router)
     app.include_router(catalog.router)
+    app.include_router(analysis.router)
+    app.include_router(size.router)
     return app
 
 

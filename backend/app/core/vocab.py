@@ -53,9 +53,37 @@ class BodyZone(StrEnum):
     CHEST = "chest"
     WAIST = "waist"
     HIPS = "hips"
+    HEIGHT = "height"
 
 
-# Какие зоны важны для посадки каждой категории.
+class BodyType(StrEnum):
+    """Тип фигуры по соотношению обхватов груди, талии и бёдер."""
+
+    HOURGLASS = "hourglass"
+    TRIANGLE = "triangle"
+    INVERTED_TRIANGLE = "inverted_triangle"
+    RECTANGLE = "rectangle"
+    OVAL = "oval"
+
+
+class Fit(StrEnum):
+    """Как вещь сидит в зоне: свободно, в самый раз или тесно."""
+
+    LOOSE = "loose"
+    GOOD = "good"
+    TIGHT = "tight"
+
+
+class Confidence(StrEnum):
+    """Насколько уверенно подобран размер."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+# Какие зоны обхватов важны для посадки каждой категории.
+# Рост учитывается дополнительно, если он указан в размерной сетке.
 CATEGORY_ZONES: dict[Category, tuple[BodyZone, ...]] = {
     Category.TSHIRT: (BodyZone.CHEST, BodyZone.WAIST),
     Category.SHIRT: (BodyZone.CHEST, BodyZone.WAIST),
