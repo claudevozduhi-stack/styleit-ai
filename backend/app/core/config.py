@@ -22,9 +22,9 @@ class Settings(BaseSettings):
     # Путь к файлу SQLite с каталогом. Файл собирается скриптом scripts/import_catalog.py.
     catalog_db_path: Path = Field(default=BACKEND_DIR / "catalog.db")
 
-    # Ключ и модель Claude API. Ключ нужен только эндпоинтам ИИ.
-    anthropic_api_key: str = Field(default="")
-    claude_model: str = Field(default="claude-opus-5-5")
+    # Ключ и модель Gemini API (бесплатный тариф Google AI Studio). Нужен только эндпоинтам ИИ.
+    gemini_api_key: str = Field(default="")
+    gemini_model: str = Field(default="gemini-3.5-flash")
 
     # Домены фронтенда, которым разрешены запросы (через запятую).
     cors_origins: str = Field(default="http://localhost:5173")
