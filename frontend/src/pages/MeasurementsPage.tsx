@@ -1,5 +1,6 @@
 // Форма мерок. Данные проверяются и сохраняются только в браузере.
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { loadMeasurements, saveMeasurements } from '../storage/localStore'
 import {
   FIELDS,
@@ -74,7 +75,14 @@ export function MeasurementsPage() {
         <button type="submit" className="rounded-lg bg-brand px-5 py-3 font-medium text-white">
           Сохранить
         </button>
-        {status && <p role="status">{status}</p>}
+        {status && (
+          <p role="status">
+            {status}{' '}
+            <Link to="/color-type" className="text-brand underline">
+              Дальше: цветотип
+            </Link>
+          </p>
+        )}
       </form>
     </section>
   )

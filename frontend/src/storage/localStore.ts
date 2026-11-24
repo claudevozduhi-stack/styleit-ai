@@ -1,10 +1,14 @@
 // Единственная точка доступа к localStorage.
 // Все данные пользователя живут только здесь, на его устройстве, и не уходят на сервер на хранение.
+import type { Capsule, ColorAnalysis } from '../types/analysis'
 import { MEASUREMENT_LIMITS, type Measurements } from '../types/body'
 
 /** Префикс ключей, чтобы «Удалить мои данные» стирало всё наше и ничего чужого. */
 const PREFIX = 'styleit:'
 const MEASUREMENTS_KEY = `${PREFIX}measurements`
+const COLOR_TYPE_KEY = `${PREFIX}color-type`
+const CAPSULE_KEY = `${PREFIX}capsule`
+const CLIENT_ID_KEY = `${PREFIX}client-id`
 
 /** Безопасно читает значение: в приватном режиме или при запрете хранилища вернёт null. */
 function readRaw(key: string): string | null {
@@ -61,6 +65,59 @@ export function loadMeasurements(): Measurements | null {
 /** Сохраняет мерки на устройстве. Возвращает false, если браузер запретил запись. */
 export function saveMeasurements(measurements: Measurements): boolean {
   return writeRaw(MEASUREMENTS_KEY, JSON.stringify(measurements))
+}
+
+/** Читает JSON-объект; при ошибке разбора или проверки возвращает null. */
+function readJson<T>(key: string, isValid: (value: unknown) => value is T): T | null {
+  const raw = readRaw(key)
+  if (raw === null) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return isValid(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function isColorAnalysis(value: unknown): value is ColorAnalysis {
+  const v = value as Partial<ColorAnalysis> | null
+  return typeof v?.season === 'string' && Array.isArray(v.palette_hex)
+}
+
+function isCapsule(value: unknown): value is Capsule {
+  const v = value as Partial<Capsule> | null
+  return Array.isArray(v?.looks) && typeof v?.estimate === 'object'
+}
+
+/** Цветотип, определённый по анкете. */
+export function loadColorType(): ColorAnalysis | null {
+  return readJson(COLOR_TYPE_KEY, isColorAnalysis)
+}
+
+export function saveColorType(colorType: ColorAnalysis): boolean {
+  return writeRaw(COLOR_TYPE_KEY, JSON.stringify(colorType))
+}
+
+/** Последняя собранная капсула — чтобы не тратить бесплатный лимит при перезагрузке страницы. */
+export function loadCapsule(): Capsule | null {
+  return readJson(CAPSULE_KEY, isCapsule)
+}
+
+export function saveCapsule(capsule: Capsule): boolean {
+  return writeRaw(CAPSULE_KEY, JSON.stringify(capsule))
+}
+
+/**
+ * Анонимный ID браузера для суточного лимита. Случайный UUID, не связан с личностью.
+ * Если хранилище недоступно, ID живёт до закрытия вкладки.
+ */
+let sessionClientId: string | null = null
+export function getClientId(): string {
+  const saved = readRaw(CLIENT_ID_KEY)
+  if (saved) return saved
+  sessionClientId ??= crypto.randomUUID()
+  writeRaw(CLIENT_ID_KEY, sessionClientId)
+  return sessionClientId
 }
 
 /** Удаляет все данные StyleIt из браузера: мерки, цветотип, образы. */

@@ -1,4 +1,13 @@
 // Типизированный клиент API бэкенда. Все запросы фронтенда идут только через него.
+import type {
+  Capsule,
+  CapsuleRequest,
+  ColorAnalysis,
+  ColorAnalysisRequest,
+  MeasurementsApi,
+  SizeRecommendation,
+} from '../types/analysis'
+import type { Measurements } from '../types/body'
 import type { CatalogPage, CatalogQuery } from '../types/catalog'
 
 /** Ошибка ответа API с HTTP-статусом и понятным текстом для пользователя. */
@@ -48,9 +57,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+/** Переводит мерки из формата фронтенда в формат API. */
+export function toApiMeasurements(m: Measurements): MeasurementsApi {
+  return {
+    gender: m.gender,
+    height_cm: m.heightCm,
+    weight_kg: m.weightKg,
+    chest_cm: m.chestCm,
+    waist_cm: m.waistCm,
+    hips_cm: m.hipsCm,
+    ...(m.shouldersCm !== undefined && { shoulders_cm: m.shouldersCm }),
+    ...(m.inseamCm !== undefined && { inseam_cm: m.inseamCm }),
+  }
+}
+
+/** Тело POST-запроса в JSON. */
+function post(body: unknown, headers?: Record<string, string>): RequestInit {
+  return { method: 'POST', body: JSON.stringify(body), headers }
+}
+
 /** Методы API, сгруппированные по разделам. */
 export const api = {
   health: () => request<{ status: string }>('/health'),
   catalog: (query: CatalogQuery = {}) =>
     request<CatalogPage>(`/catalog${buildQuery({ ...query })}`),
+  colorType: (body: ColorAnalysisRequest) => request<ColorAnalysis>('/analysis/color', post(body)),
+  recommendSize: (productId: number, measurements: Measurements) =>
+    request<SizeRecommendation>(
+      '/size/recommend',
+      post({ product_id: productId, measurements: toApiMeasurements(measurements) }),
+    ),
+  capsule: (body: CapsuleRequest, clientId: string) =>
+    request<Capsule>('/stylist/capsule', post(body, { 'X-Client-Id': clientId })),
 }
