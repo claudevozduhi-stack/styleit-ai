@@ -50,3 +50,15 @@ def test_size_recommend(client: TestClient) -> None:
 def test_size_recommend_unknown_product(client: TestClient) -> None:
     response = client.post("/size/recommend", json={"product_id": 9999, "measurements": BODY})
     assert response.status_code == 404
+
+
+def test_color_analysis(client: TestClient) -> None:
+    body = {"undertone": "cool", "skin_hex": "#F1D3C2", "hair_hex": "#1b1612", "eye_hex": "#4a6b8a"}
+    response = client.post("/analysis/color", json=body)
+    assert response.status_code == 200
+    assert response.json()["season"] == "winter"
+
+
+def test_color_analysis_rejects_bad_hex(client: TestClient) -> None:
+    body = {"undertone": "cool", "skin_hex": "red", "hair_hex": "#1b1612", "eye_hex": "#4a6b8a"}
+    assert client.post("/analysis/color", json=body).status_code == 422
