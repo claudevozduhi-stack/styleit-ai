@@ -2,3 +2,4 @@ store,brand,title,category,gender,price_kzt,color_name,color_hex,style_tags,seas
 Тестовый магазин,Тест,Футболка базовая,tshirt,unisex,4990,белый,#FFFFFF,"casual,sport",all,https://example.com/p/1,2026-11-24
 Тестовый магазин,Тест,Футболка оверсайз,tshirt,unisex,7990,чёрный,#111111,"street,casual",all,https://example.com/p/2,2026-11-24
 Тестовый магазин,Тест,Брюки прямые,trousers,female,14990,бежевый,#d8c3a5,office,demi,https://example.com/p/3,2026-11-24
+Тестовый магазин,Тест,Брюки карго,trousers,female,12990,хаки,#6b6b3a,"casual,street",all,https://example.com/p/4,2026-11-24

@@ -23,5 +23,5 @@ def size_recommend(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Товар не найден в каталоге") from exc
     except SizeChartMissingError as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Для этого товара нет размерной сетки"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Для этого товара нет размерной сетки"
         ) from exc

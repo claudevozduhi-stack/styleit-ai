@@ -56,5 +56,6 @@ def install_security(app: FastAPI, settings: Settings) -> None:
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_methods=["GET", "POST"],
+        expose_headers=["X-Capsules-Remaining"],
         allow_headers=["Content-Type", "X-Client-Id"],
     )

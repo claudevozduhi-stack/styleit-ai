@@ -118,7 +118,7 @@
 - `brands` (id, name, store_id)
 - `size_charts` (id, brand_id, category, gender, size_label, chest_min/max, waist_min/max, hips_min/max, length)
 - `products` (id, store_id, brand_id, title, category, gender, price_kzt, color_name, color_hex, style_tags, season, product_url, garment_template, collected_at)
-- `ai_requests` (id, kind, tokens_in, tokens_out, latency_ms, status, created_at) — без анонимного ID и без содержимого запросов
+- Статистика ИИ-запросов хранится не в БД, а в памяти процесса (число запросов, ошибок, повторов, среднее время, токены) и отдаётся `GET /stylist/stats` — без анонимного ID и без содержимого запросов
 
 Каталог (свои данные): 150–300 реальных товаров из 3–5 магазинов РК в CSV, импорт скриптом.
 

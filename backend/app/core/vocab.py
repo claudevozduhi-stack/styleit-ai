@@ -38,6 +38,26 @@ class Style(StrEnum):
     STREET = "street"
 
 
+class Occasion(StrEnum):
+    """Повод, под который собирается капсула."""
+
+    EVERYDAY = "everyday"
+    WORK = "work"
+    STUDY = "study"
+    DATE = "date"
+    PARTY = "party"
+    TRAVEL = "travel"
+
+
+class Slot(StrEnum):
+    """Место вещи в образе: верх, низ, платье или верхняя одежда."""
+
+    TOP = "top"
+    BOTTOM = "bottom"
+    DRESS = "dress"
+    OUTER = "outer"
+
+
 class Season(StrEnum):
     """Сезон носки вещи."""
 
@@ -93,4 +113,17 @@ CATEGORY_ZONES: dict[Category, tuple[BodyZone, ...]] = {
     Category.JEANS: (BodyZone.WAIST, BodyZone.HIPS),
     Category.SKIRT: (BodyZone.WAIST, BodyZone.HIPS),
     Category.DRESS: (BodyZone.CHEST, BodyZone.WAIST, BodyZone.HIPS),
+}
+
+
+# Место каждой категории в образе. Образ = верх + низ или платье, плюс по желанию верхняя одежда.
+CATEGORY_SLOT: dict[Category, Slot] = {
+    Category.TSHIRT: Slot.TOP,
+    Category.SHIRT: Slot.TOP,
+    Category.HOODIE: Slot.TOP,
+    Category.JACKET: Slot.OUTER,
+    Category.TROUSERS: Slot.BOTTOM,
+    Category.JEANS: Slot.BOTTOM,
+    Category.SKIRT: Slot.BOTTOM,
+    Category.DRESS: Slot.DRESS,
 }
