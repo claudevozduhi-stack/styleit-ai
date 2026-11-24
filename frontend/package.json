@@ -14,7 +14,6 @@
     "licenses": "license-checker-rseidelsohn --production --failOn 'GPL;AGPL;LGPL'"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@tanstack/react-query": "^5.108.4",
     "lucide-react": "^1.79.0",

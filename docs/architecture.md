@@ -79,7 +79,7 @@
 | Слой | Технология | Лицензия |
 |---|---|---|
 | Фронтенд | React + TypeScript + Vite, Tailwind CSS, TanStack Query | MIT |
-| 3D | three.js, @react-three/fiber, @react-three/drei; геометрия генерируется кодом | MIT |
+| 3D | three.js, @react-three/fiber; геометрия генерируется кодом | MIT |
 | Анализ фото | MediaPipe Tasks Vision (Face Landmarker), в браузере | Apache 2.0 |
 | Бэкенд | Python 3.12, FastAPI, Pydantic, SQLAlchemy, slowapi | MIT |
 | БД | SQLite, только каталог и размерные сетки, собирается из CSV при сборке | public domain |

@@ -7,6 +7,16 @@
 - Правила разработки: [CLAUDE.md](CLAUDE.md)
 - Как заполнять каталог: [data/README.md](data/README.md)
 
+## Что умеет
+
+1. **Мерки** — рост, вес, обхваты; хранятся только в браузере.
+2. **Цветотип** — сезон по подтону, цветам кожи, волос и глаз и подходящая палитра.
+3. **Капсула** — ИИ-стилист (Gemini) собирает образы из каталога магазинов РК в рамках бюджета;
+   ответ ИИ проверяется кодом, размер каждой вещи считается по размерной сетке.
+4. **3D-примерка** — манекен строится из ваших мерок, вещь — по размерной сетке магазина;
+   посадка по зонам подсвечивается цветом, можно сравнить любой размер.
+5. **Смета** — итог по капсуле и остаток бюджета.
+
 ## Приватность
 
 Регистрации нет. Мерки хранятся только в браузере пользователя, фото не покидает устройство.
@@ -49,6 +59,13 @@ npm install
 npm run dev
 ```
 
+### Бэкенд в Docker (по желанию)
+
+```bash
+cp .env.example backend/.env          # вписать GEMINI_API_KEY
+docker compose up --build             # API: http://localhost:8000/docs
+```
+
 ## Проверки
 
 ```bash
@@ -60,8 +77,10 @@ cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 
 Порядок важен: сначала бэкенд (нужен его адрес), потом фронтенд, потом CORS.
 
-1. **Бэкенд на Render** (https://render.com, вход через GitHub):
-   New → Web Service → выбрать репозиторий → Language: **Docker**,
+1. **Бэкенд на Render** (https://render.com, вход через GitHub).
+   Быстрый путь: New → Blueprint → выбрать репозиторий; Render прочитает `render.yaml`
+   и спросит `GEMINI_API_KEY` и `CORS_ORIGINS` (CORS можно оставить пустым до шага 3).
+   Ручной путь: New → Web Service → выбрать репозиторий → Language: **Docker**,
    Dockerfile Path: `backend/Dockerfile`, Docker Build Context: `.` (корень), Instance Type: **Free**.
    Environment Variables: `GEMINI_API_KEY` (ключ), `GEMINI_MODEL` = `gemini-3.5-flash`.
    После сборки скопировать адрес вида `https://styleit-api.onrender.com` и проверить `.../health`.

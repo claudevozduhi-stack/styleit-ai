@@ -1,5 +1,5 @@
 // Результат ИИ-стилиста: образы, размеры, смета и ссылки на магазины.
-import { ExternalLink } from 'lucide-react'
+import { Box, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Swatch } from '../components/Swatch'
 import { formatKzt } from '../features/capsule/labels'
@@ -32,6 +32,12 @@ function ItemCard({ item }: { item: LookItem }) {
         )}
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="font-semibold">{formatKzt(product.price_kzt)}</span>
+          <Link
+            to={`/fitting/${product.id}`}
+            className="inline-flex items-center gap-1 text-brand underline"
+          >
+            Примерить в 3D <Box className="h-3 w-3" aria-hidden />
+          </Link>
           <a
             href={product.product_url}
             target="_blank"

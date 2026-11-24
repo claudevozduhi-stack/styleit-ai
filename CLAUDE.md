@@ -18,7 +18,7 @@
 | Слой | Технология |
 |---|---|
 | Фронтенд | React 19, TypeScript (strict), Vite 6, Tailwind CSS 4, React Router 7, TanStack Query 5 |
-| 3D | three.js, @react-three/fiber, @react-three/drei; манекен и одежда генерируются кодом (BufferGeometry), без внешних 3D-моделей |
+| 3D | three.js, @react-three/fiber; манекен и одежда генерируются кодом (BufferGeometry), без внешних 3D-моделей |
 | Анализ фото | @mediapipe/tasks-vision (Face Landmarker), только в браузере |
 | Бэкенд | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0, slowapi (лимиты) |
 | БД | SQLite: только каталог и размерные сетки, собирается из CSV скриптом |

@@ -1,0 +1,22 @@
+# Render Blueprint: бэкенд StyleIt AI на бесплатном тарифе.
+# Секреты (GEMINI_API_KEY) и адрес фронтенда (CORS_ORIGINS) вводятся в панели Render, не в git.
+services:
+  - type: web
+    name: styleit-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FREE_CAPSULES_PER_DAY
+        value: "5"
+      - key: RATE_LIMIT
+        value: 30/minute

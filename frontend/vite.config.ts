@@ -6,6 +6,11 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    // three.js (~900 КБ, 250 КБ в gzip) грузится лениво только на странице примерки,
+    // поэтому предупреждение о размере отдельного чанка поднято до этого объёма.
+    chunkSizeWarningLimit: 1000,
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],

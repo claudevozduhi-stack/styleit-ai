@@ -1,0 +1,15 @@
+# Локальный запуск бэкенда в том же Docker-образе, что и на Render.
+# Ключ Gemini берётся из backend/.env (файл в .gitignore, шаблон — .env.example).
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      # Путь к каталогу внутри образа; переопределяет значение из backend/.env.
+      CATALOG_DB_PATH: /srv/backend/catalog.db
+    ports:
+      - "8000:8000"
