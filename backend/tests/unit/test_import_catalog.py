@@ -17,7 +17,7 @@ def copy_fixture(tmp_path: Path) -> Path:
 def test_fixture_catalog_is_valid() -> None:
     parsed = parse_catalog(FIXTURE_DATA)
     assert parsed.errors == []
-    assert len(parsed.products) == 3
+    assert len(parsed.products) == 4
     assert parsed.products[0].color_hex == "#ffffff"
 
 
@@ -30,8 +30,8 @@ def test_bad_hex_and_unknown_category_are_reported_with_line(tmp_path: Path) -> 
             "https://example.com/p/9,2026-11-24\n"
         )
     errors = parse_catalog(data).errors
-    assert any("products.csv:5: category" in error for error in errors)
-    assert any("products.csv:5: color_hex" in error for error in errors)
+    assert any("products.csv:6: category" in error for error in errors)
+    assert any("products.csv:6: color_hex" in error for error in errors)
 
 
 def test_product_without_size_chart_is_rejected(tmp_path: Path) -> None:

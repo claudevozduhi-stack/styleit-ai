@@ -18,7 +18,7 @@ def test_security_headers_present(client: TestClient) -> None:
 
 def test_catalog_sorted_by_price(client: TestClient) -> None:
     body = client.get("/catalog").json()
-    assert body["total"] == 3
+    assert body["total"] == 4
     prices = [item["price_kzt"] for item in body["items"]]
     assert prices == sorted(prices)
     assert body["items"][0]["store"] == "Тестовый магазин"
@@ -26,7 +26,7 @@ def test_catalog_sorted_by_price(client: TestClient) -> None:
 
 def test_catalog_filters(client: TestClient) -> None:
     body = client.get("/catalog", params={"style": "street"}).json()
-    assert [item["title"] for item in body["items"]] == ["Футболка оверсайз"]
+    assert [item["title"] for item in body["items"]] == ["Футболка оверсайз", "Брюки карго"]
 
     body = client.get("/catalog", params={"gender": "male"}).json()
     # Мужчине подходят унисекс-футболки, но не женские брюки.
