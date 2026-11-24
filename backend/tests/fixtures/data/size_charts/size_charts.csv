@@ -1,0 +1,6 @@
+store,brand,category,gender,size_label,size_order,chest_min,chest_max,waist_min,waist_max,hips_min,hips_max,height_min,height_max
+Тестовый магазин,Тест,tshirt,unisex,S,2,86,92,70,76,,,,
+Тестовый магазин,Тест,tshirt,unisex,M,3,92,98,76,82,,,,
+Тестовый магазин,Тест,tshirt,unisex,L,4,98,104,82,88,,,,
+Тестовый магазин,Тест,trousers,female,S,2,,,64,68,90,94,,
+Тестовый магазин,Тест,trousers,female,M,3,,,68,72,94,98,,

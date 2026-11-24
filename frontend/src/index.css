@@ -1,0 +1,14 @@
+/* Tailwind CSS v4 и базовые цвета интерфейса. */
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --color-brand: #6d4aff;
+  --color-fit-loose: #3b82f6;
+  --color-fit-good: #22c55e;
+  --color-fit-tight: #ef4444;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 antialiased;
+}

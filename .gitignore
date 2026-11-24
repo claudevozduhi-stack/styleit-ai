@@ -1,0 +1,23 @@
+# Секреты
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+*.egg-info/
+
+# Собранный каталог (пересобирается из CSV)
+backend/*.db
+
+# Node
+node_modules/
+dist/
+frontend/test-results/
+frontend/playwright-report/
