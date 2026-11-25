@@ -16,6 +16,9 @@ services:
         value: gemini-3.5-flash
       - key: CORS_ORIGINS
         sync: false
+      # Превью Vercel своей команды, например https://styleit-ai-[a-z0-9-]+-<команда>\.vercel\.app
+      - key: CORS_ORIGIN_REGEX
+        sync: false
       - key: FREE_CAPSULES_PER_DAY
         value: "5"
       - key: RATE_LIMIT

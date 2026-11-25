@@ -21,7 +21,17 @@ export class ApiError extends Error {
   }
 }
 
-const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
+/**
+ * Адрес бэкенда. В разработке по умолчанию localhost; в собранном сайте он обязан быть задан
+ * через VITE_API_URL — иначе запросы ушли бы на компьютер посетителя и упали бы с непонятной ошибкой.
+ */
+export function resolveApiUrl(configured: string | undefined, isDev: boolean): string {
+  const value = configured?.trim()
+  if (value) return value.replace(/\/$/, '')
+  return isDev ? 'http://localhost:8000' : ''
+}
+
+const API_URL = resolveApiUrl(import.meta.env.VITE_API_URL, import.meta.env.DEV)
 
 /** Превращает объект параметров в строку запроса, пропуская пустые значения. */
 export function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -35,6 +45,9 @@ export function buildQuery(params: Record<string, string | number | undefined>):
 
 /** Выполняет запрос и разбирает JSON; при ошибке бросает ApiError с сообщением сервера. */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!API_URL) {
+    throw new ApiError(0, 'Адрес сервера не настроен: задайте VITE_API_URL для этого деплоя.')
+  }
   let response: Response
   try {
     response = await fetch(`${API_URL}${path}`, {
