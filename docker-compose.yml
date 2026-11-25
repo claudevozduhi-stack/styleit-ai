@@ -1,5 +1,5 @@
 # Локальный запуск бэкенда в том же Docker-образе, что и на Render.
-# Ключ Gemini берётся из backend/.env (файл в .gitignore, шаблон — .env.example).
+# Ключ Claude (и запасной Gemini) берётся из backend/.env (файл в .gitignore, шаблон — .env.example).
 services:
   backend:
     build:

@@ -11,7 +11,7 @@
 
 1. **Мерки** — рост, вес, обхваты; хранятся только в браузере.
 2. **Цветотип** — сезон по подтону, цветам кожи, волос и глаз и подходящая палитра.
-3. **Капсула** — ИИ-стилист (Gemini) собирает образы из каталога магазинов РК в рамках бюджета;
+3. **Капсула** — ИИ-стилист (Claude) собирает образы из каталога магазинов РК в рамках бюджета;
    ответ ИИ проверяется кодом, размер каждой вещи считается по размерной сетке.
 4. **3D-примерка** — манекен строится из ваших мерок, вещь — по размерной сетке магазина;
    посадка по зонам подсвечивается цветом, можно сравнить любой размер.
@@ -24,12 +24,13 @@
 
 ## Локальный запуск
 
-Нужны Python 3.12+ и Node.js 22+. Бесплатный ключ Gemini: https://aistudio.google.com/apikey
+Нужны Python 3.12+ и Node.js 22+. Ключ Claude API: https://console.anthropic.com → Settings → API Keys
+(сначала пополнить баланс в Billing; капсула на Haiku стоит около $0.001).
 
 ### macOS / Linux
 
 ```bash
-cp .env.example backend/.env          # затем вписать GEMINI_API_KEY в backend/.env
+cp .env.example backend/.env          # затем вписать ANTHROPIC_API_KEY в backend/.env
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -45,7 +46,7 @@ npm run dev                           # http://localhost:5173
 ### Windows (PowerShell)
 
 ```powershell
-copy .env.example backend\.env        # затем открыть backend\.env в Блокноте и вписать GEMINI_API_KEY
+copy .env.example backend\.env        # затем открыть backend\.env в Блокноте и вписать ANTHROPIC_API_KEY
 cd backend
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1             # если ругается на политику: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -62,7 +63,7 @@ npm run dev
 ### Бэкенд в Docker (по желанию)
 
 ```bash
-cp .env.example backend/.env          # вписать GEMINI_API_KEY
+cp .env.example backend/.env          # вписать ANTHROPIC_API_KEY
 docker compose up --build             # API: http://localhost:8000/docs
 ```
 
@@ -79,10 +80,10 @@ cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 
 1. **Бэкенд на Render** (https://render.com, вход через GitHub).
    Быстрый путь: New → Blueprint → выбрать репозиторий; Render прочитает `render.yaml`
-   и спросит `GEMINI_API_KEY` и `CORS_ORIGINS` (CORS можно оставить пустым до шага 3).
+   и спросит `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (можно оставить пустым) и `CORS_ORIGINS` (CORS можно оставить пустым до шага 3).
    Ручной путь: New → Web Service → выбрать репозиторий → Language: **Docker**,
    Dockerfile Path: `backend/Dockerfile`, Docker Build Context: `.` (корень), Instance Type: **Free**.
-   Environment Variables: `GEMINI_API_KEY` (ключ), `GEMINI_MODEL` = `gemini-3.5-flash`.
+   Environment Variables: `ANTHROPIC_API_KEY` (ключ), `CLAUDE_MODEL` = `claude-haiku-5-5`, `AI_PROVIDER` = `claude`.
    После сборки скопировать адрес вида `https://styleit-api.onrender.com` и проверить `.../health`.
 2. **Фронтенд на Vercel** (https://vercel.com, вход через GitHub):
    Add New → Project → репозиторий → Root Directory: `frontend` (Vite определится сам).
@@ -93,9 +94,12 @@ cd frontend && npm run lint && npm run typecheck && npm test && npm run build
    `https://styleit-ai-[a-z0-9-]+-<команда>\.vercel\.app` (часть адреса превью после имени ветки).
    В Vercel переменная `VITE_API_URL` должна быть отмечена и для **Production**, и для **Preview**.
 
-Если капсула отвечает «Google отклонил ключ Gemini»: создайте ключ заново на
-https://aistudio.google.com/apikey (без ограничений по сайтам), вставьте в `GEMINI_API_KEY` на Render
-и нажмите Save. Причину отказа видно в логах Render (строка `Gemini API error`).
+Модель меняется переменной `CLAUDE_MODEL` на Render без правки кода (например, `claude-sonnet-5-5`:
+сильнее, но примерно в 20 раз дороже). Запасной Gemini включается `AI_PROVIDER` = `gemini` и `GEMINI_API_KEY`.
+
+Если капсула отвечает «Anthropic отклонил ключ Claude»: создайте ключ заново в консоли Anthropic,
+вставьте в `ANTHROPIC_API_KEY` на Render и нажмите Save. «Закончились средства» — пополните Billing.
+Причину отказа видно в логах Render (строка `Claude API error`).
 
 Бесплатный Render «засыпает» после 15 минут без запросов, первый запрос после этого идёт ~1 минуту.
 Перед показом откройте `/health`, чтобы разбудить сервис.

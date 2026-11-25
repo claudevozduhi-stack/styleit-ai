@@ -2,7 +2,8 @@
 
 from fastapi import FastAPI
 
-from app.ai.client import GeminiClient, LLMClient
+from app.ai.client import LLMClient
+from app.ai.factory import build_llm
 from app.api import analysis, catalog, health, size, stylist
 from app.core.config import Settings, get_settings
 from app.core.security import install_security
@@ -14,7 +15,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     """Собирает приложение: подключает защиту, ИИ-клиент, лимиты и все роутеры.
 
     Настройки и ИИ-клиент можно передать явно (так делают тесты), иначе
-    настройки читаются из окружения, а клиент создаётся для Gemini.
+    настройки читаются из окружения, а клиент выбирается настройкой AI_PROVIDER.
     """
     settings = settings or get_settings()
     app = FastAPI(
@@ -23,7 +24,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         description="ИИ-стилист и подбор размера по меркам. Персональные данные не хранятся.",
     )
     install_security(app, settings)
-    app.state.llm = llm or GeminiClient(settings.gemini_api_key, settings.gemini_model)
+    app.state.llm = llm or build_llm(settings)
     app.state.daily_limiter = DailyLimiter(settings.free_capsules_per_day)
     app.state.ai_metrics = AIMetrics()
     app.include_router(health.router)

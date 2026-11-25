@@ -34,7 +34,7 @@ class CapsuleRequest(BaseModel):
         return [color.lower() for color in colors]
 
 
-# --- Схема ответа модели. Gemini обязан вернуть JSON ровно такой формы. ---
+# --- Схема ответа модели. Модель обязана вернуть JSON ровно такой формы. ---
 
 
 class AiLook(BaseModel):
