@@ -1,5 +1,5 @@
 # Render Blueprint: бэкенд StyleIt AI на бесплатном тарифе.
-# Секреты (GEMINI_API_KEY) и адрес фронтенда (CORS_ORIGINS) вводятся в панели Render, не в git.
+# Секреты (ANTHROPIC_API_KEY, GEMINI_API_KEY) и адрес фронтенда (CORS_ORIGINS) вводятся в панели Render, не в git.
 services:
   - type: web
     name: styleit-api
@@ -10,6 +10,14 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      - key: AI_PROVIDER
+        value: claude
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Сменить модель без правки кода, например на claude-sonnet-5-5
+      - key: CLAUDE_MODEL
+        value: claude-haiku-5-5
+      # Запасной Gemini (AI_PROVIDER=gemini); ключ можно не задавать
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL

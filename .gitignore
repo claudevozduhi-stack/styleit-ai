@@ -21,3 +21,7 @@ node_modules/
 dist/
 frontend/test-results/
 frontend/playwright-report/
+
+# Артефакты сборки пакета (pip install .)
+build/
+*.egg-info/

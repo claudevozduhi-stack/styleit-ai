@@ -7,6 +7,7 @@
 import re
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,7 +24,15 @@ class Settings(BaseSettings):
     # Путь к файлу SQLite с каталогом. Файл собирается скриптом scripts/import_catalog.py.
     catalog_db_path: Path = Field(default=BACKEND_DIR / "catalog.db")
 
-    # Ключ и модель Gemini API (бесплатный тариф Google AI Studio). Нужен только эндпоинтам ИИ.
+    # Какой ИИ-сервис использует стилист: "claude" (основной) или "gemini" (запасной).
+    ai_provider: Literal["claude", "gemini"] = Field(default="claude")
+
+    # Ключ и модель Claude API (Anthropic, оплата по токенам). Нужны только эндпоинтам ИИ.
+    # Модель — переменная, чтобы переключиться, например, на claude-sonnet-5-5 без правки кода.
+    anthropic_api_key: str = Field(default="")
+    claude_model: str = Field(default="claude-haiku-5-5")
+
+    # Ключ и модель Gemini API — используются, только если AI_PROVIDER=gemini.
     gemini_api_key: str = Field(default="")
     gemini_model: str = Field(default="gemini-3.5-flash")
 

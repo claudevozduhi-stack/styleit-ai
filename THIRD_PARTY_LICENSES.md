@@ -13,6 +13,8 @@
 | Uvicorn | BSD-3-Clause | https://github.com/encode/uvicorn |
 | Pydantic, pydantic-settings | MIT | https://github.com/pydantic/pydantic |
 | SQLAlchemy | MIT | https://github.com/sqlalchemy/sqlalchemy |
+| Anthropic Python SDK (anthropic) | MIT (SDK; использование API — по коммерческим условиям Anthropic) | https://github.com/anthropics/anthropic-sdk-python |
+| httpx2, jiter, distro, docstring-parser (зависимости anthropic) | BSD-3-Clause, MIT, Apache 2.0, MIT | https://pypi.org/project/httpx2/ |
 | Google Gen AI SDK (google-genai) | Apache 2.0 (SDK; использование API — по условиям Gemini API) | https://github.com/googleapis/python-genai |
 | SlowAPI, limits | MIT | https://github.com/laurentS/slowapi |
 | httpx | BSD-3-Clause | https://github.com/encode/httpx |
