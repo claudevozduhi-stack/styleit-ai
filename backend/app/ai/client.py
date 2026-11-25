@@ -5,6 +5,7 @@
 не ходить в сеть.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -16,6 +17,11 @@ from pydantic import BaseModel, ValidationError
 from app.ai.errors import AIInvalidResponseError, AIQuotaExceededError, AIUnavailableError
 
 HTTP_TOO_MANY_REQUESTS = 429
+# Коды, которыми Google отвечает на неверный, ограниченный или заблокированный ключ.
+KEY_REJECTED_CODES = frozenset({400, 401, 403})
+HTTP_NOT_FOUND = 404
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,26 @@ class GeminiClient:
             self._client = genai.Client(api_key=self._api_key)
         return self._client
 
+    def _map_api_error(self, exc: genai_errors.APIError) -> Exception:
+        """Переводит ошибку Gemini в ошибку приложения с понятной причиной.
+
+        В лог пишется только код и текст ответа Google: в них нет данных пользователя,
+        зато по ним видно, почему отклонён ключ или не найдена модель.
+        """
+        logger.warning("Gemini API error %s %s: %s", exc.code, exc.status, exc.message)
+        if exc.code == HTTP_TOO_MANY_REQUESTS:
+            return AIQuotaExceededError("Лимит бесплатных запросов к ИИ на сегодня исчерпан.")
+        if exc.code in KEY_REJECTED_CODES:
+            return AIUnavailableError(
+                f"Google отклонил ключ Gemini (код {exc.code}). "
+                "Проверьте GEMINI_API_KEY в настройках сервера."
+            )
+        if exc.code == HTTP_NOT_FOUND:
+            return AIUnavailableError(
+                f"Модель {self._model} недоступна для этого ключа. Проверьте GEMINI_MODEL."
+            )
+        return AIUnavailableError(f"ИИ-сервис ответил ошибкой {exc.code}.")
+
     async def generate_json[T: BaseModel](
         self, system: str, messages: list[Message], schema: type[T]
     ) -> tuple[T, str, Usage]:
@@ -82,11 +108,7 @@ class GeminiClient:
                 model=self._model, contents=contents, config=config
             )
         except genai_errors.APIError as exc:
-            if exc.code == HTTP_TOO_MANY_REQUESTS:
-                raise AIQuotaExceededError(
-                    "Лимит бесплатных запросов к ИИ на сегодня исчерпан."
-                ) from exc
-            raise AIUnavailableError(f"ИИ-сервис ответил ошибкой {exc.code}.") from exc
+            raise self._map_api_error(exc) from exc
 
         text = response.text or ""
         try:

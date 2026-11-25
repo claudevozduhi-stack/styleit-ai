@@ -82,3 +82,18 @@ def test_missing_key_raises_unavailable() -> None:
     client = GeminiClient(api_key="", model="gemini-test")
     with pytest.raises(AIUnavailableError, match="GEMINI_API_KEY"):
         run(client)
+
+
+@pytest.mark.parametrize("code", [400, 401, 403])
+def test_rejected_key_is_explained(code: int) -> None:
+    error = genai_errors.ClientError(code, {"error": {"message": "denied", "status": "DENIED"}})
+    client, _ = client_with(error)
+    with pytest.raises(AIUnavailableError, match="отклонил ключ Gemini"):
+        run(client)
+
+
+def test_unknown_model_is_explained() -> None:
+    error = genai_errors.ClientError(404, {"error": {"message": "not found"}})
+    client, _ = client_with(error)
+    with pytest.raises(AIUnavailableError, match="GEMINI_MODEL"):
+        run(client)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildQuery } from './client'
+import { buildQuery, resolveApiUrl } from './client'
 
 describe('buildQuery', () => {
   it('пропускает пустые значения', () => {
@@ -10,5 +10,20 @@ describe('buildQuery', () => {
 
   it('возвращает пустую строку без параметров', () => {
     expect(buildQuery({})).toBe('')
+  })
+})
+
+describe('resolveApiUrl', () => {
+  it('берёт адрес из настройки и убирает слеш в конце', () => {
+    expect(resolveApiUrl('https://api.example.com/', false)).toBe('https://api.example.com')
+  })
+
+  it('в разработке без настройки идёт на localhost', () => {
+    expect(resolveApiUrl(undefined, true)).toBe('http://localhost:8000')
+  })
+
+  it('в собранном сайте без настройки не подставляет localhost', () => {
+    expect(resolveApiUrl(undefined, false)).toBe('')
+    expect(resolveApiUrl('  ', false)).toBe('')
   })
 })

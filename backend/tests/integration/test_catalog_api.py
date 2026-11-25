@@ -1,6 +1,14 @@
 """Проверки API каталога и защитных заголовков."""
 
+from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+from app.core.config import Settings
+from app.main import create_app
+from tests.fakes import FakeLLM
 
 
 def test_health(client: TestClient) -> None:
@@ -45,3 +53,25 @@ def test_cors_allows_only_configured_origin(client: TestClient) -> None:
     assert allowed.headers.get("access-control-allow-origin") == "http://localhost:5173"
     denied = client.get("/health", headers={"Origin": "https://evil.example"})
     assert "access-control-allow-origin" not in denied.headers
+
+
+def test_cors_regex_allows_only_matching_preview_origins(catalog_db: Path) -> None:
+    settings = Settings(
+        catalog_db_path=catalog_db,
+        cors_origin_regex=r"https://styleit-ai-[a-z0-9-]+-styleit1\.vercel\.app",
+    )
+    client = TestClient(create_app(settings, llm=FakeLLM([])))
+    preview = "https://styleit-ai-git-feature-x-styleit1.vercel.app"
+    allowed = client.get("/health", headers={"Origin": preview})
+    assert allowed.headers.get("access-control-allow-origin") == preview
+    for origin in (
+        "https://other-project.vercel.app",
+        "https://styleit-ai-git-x-styleit1.vercel.app.evil.example",
+    ):
+        denied = client.get("/health", headers={"Origin": origin})
+        assert "access-control-allow-origin" not in denied.headers
+
+
+def test_invalid_cors_regex_fails_at_startup(catalog_db: Path) -> None:
+    with pytest.raises(ValidationError):
+        Settings(catalog_db_path=catalog_db, cors_origin_regex="(")

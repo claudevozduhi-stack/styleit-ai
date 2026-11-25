@@ -89,6 +89,13 @@ cd frontend && npm run lint && npm run typecheck && npm test && npm run build
    Environment Variable: `VITE_API_URL` = адрес бэкенда из шага 1. Deploy.
 3. **CORS**: в Render добавить переменную `CORS_ORIGINS` = адрес сайта Vercel
    (например `https://styleit-ai.vercel.app`) и нажать Save — сервис перезапустится.
+   Чтобы работали и превью веток Vercel, добавить `CORS_ORIGIN_REGEX` вида
+   `https://styleit-ai-[a-z0-9-]+-<команда>\.vercel\.app` (часть адреса превью после имени ветки).
+   В Vercel переменная `VITE_API_URL` должна быть отмечена и для **Production**, и для **Preview**.
+
+Если капсула отвечает «Google отклонил ключ Gemini»: создайте ключ заново на
+https://aistudio.google.com/apikey (без ограничений по сайтам), вставьте в `GEMINI_API_KEY` на Render
+и нажмите Save. Причину отказа видно в логах Render (строка `Gemini API error`).
 
 Бесплатный Render «засыпает» после 15 минут без запросов, первый запрос после этого идёт ~1 минуту.
 Перед показом откройте `/health`, чтобы разбудить сервис.

@@ -4,10 +4,11 @@
 захардкоженных ключей, путей к БД или доменов.
 """
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Корень backend/: от него считаются относительные пути по умолчанию.
@@ -29,11 +30,27 @@ class Settings(BaseSettings):
     # Домены фронтенда, которым разрешены запросы (через запятую).
     cors_origins: str = Field(default="http://localhost:5173")
 
+    # Регулярное выражение для превью-деплоев фронтенда, у которых адрес меняется с каждой веткой
+    # (например, Vercel Preview). Пусто — превью не разрешены. Сравнивается со всем Origin целиком.
+    cors_origin_regex: str = Field(default="")
+
     # Сколько бесплатных генераций капсулы в сутки на один анонимный ID.
     free_capsules_per_day: int = Field(default=5, ge=1)
 
     # Общий лимит частоты запросов к API в формате slowapi, например "30/minute".
     rate_limit: str = Field(default="30/minute")
+
+    @field_validator("cors_origin_regex")
+    @classmethod
+    def _check_regex(cls, value: str) -> str:
+        """Проверяет выражение при старте, чтобы опечатка не всплыла только на запросе."""
+        try:
+            re.compile(value)
+        except re.error as error:
+            raise ValueError(
+                f"CORS_ORIGIN_REGEX — неверное регулярное выражение: {error}"
+            ) from error
+        return value
 
     @property
     def cors_origin_list(self) -> list[str]:
