@@ -2,7 +2,17 @@
 // Загружается лениво (React.lazy), чтобы three.js не утяжелял остальные страницы.
 import { Canvas, useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import { BufferAttribute, BufferGeometry, DoubleSide } from 'three'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  DataTexture,
+  DoubleSide,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  RepeatWrapping,
+  RGBAFormat,
+  type Texture,
+} from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { SizeOption } from '../../types/analysis'
 import type { Measurements } from '../../types/body'
@@ -10,11 +20,15 @@ import type { Category } from '../../types/catalog'
 import type { MeshData } from '../avatar/loft'
 import { buildBodyModel } from '../avatar/sections'
 import { MANNEQUIN_HEX } from './colors'
+import { CATEGORY_FABRIC, FABRIC_TEXTURE_SIZE, fabricBumpMap, type FabricKind } from './fabric'
 import { buildGarment, type ColorMode } from './garment'
 import { bodyMeshes, garmentMeshes } from './scene'
 
 /** Сантиметры модели → метры сцены. */
 const CM_TO_M = 0.01
+/** Сколько раз фактура повторяется по окружности детали. */
+const FABRIC_REPEAT_AROUND = 10
+const BACKGROUND_HEX = '#f3f1ee'
 
 export interface FittingSceneProps {
   measurements: Measurements
@@ -24,20 +38,65 @@ export interface FittingSceneProps {
   colorMode: ColorMode
 }
 
-/** Сетка из готовых массивов; геометрия освобождается при смене данных. */
-function DataMesh({ data }: { data: MeshData }) {
+/** Геометрия из готовых массивов; освобождается при смене данных. */
+function useGeometry(data: MeshData): BufferGeometry {
   const geometry = useMemo(() => {
     const result = new BufferGeometry()
     result.setAttribute('position', new BufferAttribute(data.positions, 3))
+    result.setAttribute('normal', new BufferAttribute(data.normals, 3))
     result.setAttribute('color', new BufferAttribute(data.colors, 3))
+    result.setAttribute('uv', new BufferAttribute(data.uvs, 2))
     result.setIndex(new BufferAttribute(data.indices, 1))
-    result.computeVertexNormals()
     return result
   }, [data])
   useEffect(() => () => geometry.dispose(), [geometry])
+  return geometry
+}
+
+/** Фактура ткани для выбранной категории. */
+function useFabricTexture(kind: FabricKind): Texture {
+  const texture = useMemo(() => {
+    const size = FABRIC_TEXTURE_SIZE
+    const result = new DataTexture(fabricBumpMap(kind, size), size, size, RGBAFormat)
+    result.wrapS = RepeatWrapping
+    result.wrapT = RepeatWrapping
+    result.repeat.set(FABRIC_REPEAT_AROUND, 1)
+    // Мипмапы убирают муар фактуры на удалении камеры.
+    result.generateMipmaps = true
+    result.minFilter = LinearMipmapLinearFilter
+    result.magFilter = LinearFilter
+    result.needsUpdate = true
+    return result
+  }, [kind])
+  useEffect(() => () => texture.dispose(), [texture])
+  return texture
+}
+
+/** Матовый манекен, как в витрине магазина. */
+function BodyMesh({ data }: { data: MeshData }) {
+  const geometry = useGeometry(data)
   return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial vertexColors side={DoubleSide} roughness={0.85} />
+    <mesh geometry={geometry} castShadow receiveShadow>
+      <meshStandardMaterial vertexColors roughness={0.6} metalness={0} />
+    </mesh>
+  )
+}
+
+/** Ткань: мягкий «бархатный» отблеск (sheen) и рельеф переплетения. */
+function GarmentMesh({ data, fabric }: { data: MeshData; fabric: Texture }) {
+  const geometry = useGeometry(data)
+  return (
+    <mesh geometry={geometry} castShadow receiveShadow>
+      <meshPhysicalMaterial
+        vertexColors
+        side={DoubleSide}
+        roughness={0.85}
+        sheen={0.7}
+        sheenRoughness={0.6}
+        sheenColor="#ffffff"
+        bumpMap={fabric}
+        bumpScale={0.08}
+      />
     </mesh>
   )
 }
@@ -52,13 +111,38 @@ function CameraControls({ targetY }: { targetY: number }) {
     controls.enablePan = false
     controls.minDistance = 1.2
     controls.maxDistance = 4
+    controls.maxPolarAngle = Math.PI * 0.55
     controls.update()
     return () => controls.dispose()
   }, [camera, canvas, targetY])
   return null
 }
 
-/** Сцена: свет, манекен, вещь и вращение камеры пальцем или мышью. */
+/** Студийный свет: мягкий общий, основной с тенью, заполняющий и контровой. */
+function StudioLights({ height }: { height: number }) {
+  return (
+    <>
+      <hemisphereLight args={['#ffffff', '#d8cfc4', 0.9]} />
+      <directionalLight
+        position={[1.5, height + 1.5, 2]}
+        intensity={1.8}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-left={-1.2}
+        shadow-camera-right={1.2}
+        shadow-camera-top={2.2}
+        shadow-camera-bottom={-0.2}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.02}
+      />
+      <directionalLight position={[-2, height, 1]} intensity={0.5} />
+      <directionalLight position={[0, height + 0.5, -2.5]} intensity={0.7} />
+    </>
+  )
+}
+
+/** Сцена: свет, пол с мягкой тенью, манекен, вещь и вращение камеры пальцем или мышью. */
 export default function FittingScene(props: FittingSceneProps) {
   const { measurements, category, colorHex, option, colorMode } = props
   const body = useMemo(() => buildBodyModel(measurements), [measurements])
@@ -67,22 +151,29 @@ export default function FittingScene(props: FittingSceneProps) {
     () => garmentMeshes(buildGarment(body, category, option, colorHex, colorMode)),
     [body, category, option, colorHex, colorMode],
   )
-  const centerY = body.heightCm * 0.55 * CM_TO_M
+  const fabric = useFabricTexture(CATEGORY_FABRIC[category])
+  const heightM = body.heightCm * CM_TO_M
+  const centerY = heightM * 0.55
+  const head = body.head
   return (
-    <Canvas camera={{ position: [0, centerY, 2.6], fov: 40 }} dpr={[1, 2]}>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[2, 3, 2]} intensity={1.6} />
-      <directionalLight position={[-2, 1, -2]} intensity={0.5} />
+    <Canvas shadows camera={{ position: [0, centerY, 2.6], fov: 40 }} dpr={[1, 2]}>
+      <color attach="background" args={[BACKGROUND_HEX]} />
+      <StudioLights height={heightM} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[1.5, 64]} />
+        <shadowMaterial opacity={0.18} />
+      </mesh>
       <group scale={CM_TO_M}>
         {bodyData.map((data, index) => (
-          <DataMesh key={`body-${index}`} data={data} />
+          <BodyMesh key={`body-${index}`} data={data} />
         ))}
-        <mesh position={[0, body.head.y, 0]}>
-          <sphereGeometry args={[body.head.radius, 32, 24]} />
-          <meshStandardMaterial color={MANNEQUIN_HEX} roughness={0.85} />
+        {/* Голова — гладкий эллипсоид без черт лица: манекен не похож на конкретного человека. */}
+        <mesh position={[0, head.y, head.z]} scale={[0.82, 1, 0.95]} castShadow>
+          <sphereGeometry args={[head.radius, 48, 32]} />
+          <meshStandardMaterial color={MANNEQUIN_HEX} roughness={0.6} />
         </mesh>
         {garmentData.map((data, index) => (
-          <DataMesh key={`garment-${index}`} data={data} />
+          <GarmentMesh key={`garment-${index}`} data={data} fabric={fabric} />
         ))}
       </group>
       <CameraControls targetY={centerY} />

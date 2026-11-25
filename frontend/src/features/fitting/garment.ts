@@ -21,6 +21,10 @@ export interface GarmentPart {
   rings: LoftRing[]
   capBottom: boolean
   capTop: boolean
+  /** Число складок по окружности детали. */
+  foldCount: number
+  /** Толщина подгиба на открытых краях, см (0 — без подгиба). */
+  edgeThickness: number
 }
 
 /** Запас в одной зоне сетки на высоте этой зоны на манекене. */
@@ -143,9 +147,31 @@ export function clampEase(easeCm: number): number {
   return Math.min(Math.max(easeCm, MIN_CLEARANCE_CM), MAX_EASE_CM)
 }
 
-/** Сечение одежды: обхват тела плюс запас. */
+/** Толщина подгиба ткани на подоле, манжетах и горловине, см. */
+const FABRIC_EDGE_CM = 0.6
+
+/** Дополнительный обхват подола юбки и платья, чтобы ткань висела вокруг ног, см. */
+const SKIRT_LEG_ROOM_CM = 6
+
+/** Глубина складок растёт с запасом: в обтяжку ткань гладкая, свободная вещь собирается в складки. */
+const FOLD_PER_EASE_CM = 0.09
+const MAX_FOLD_DEPTH_CM = 1.5
+/** Складки по окружности: на туловище, на рукавах и штанинах, у юбок и платьев. */
+const FOLDS = { torso: 10, limb: 6, skirt: 14 } as const
+
+/** Глубина складок для запаса easeCm: до 2 см запаса складок нет. */
+export function foldDepthFor(easeCm: number): number {
+  return Math.min(Math.max((easeCm - 2) * FOLD_PER_EASE_CM, 0), MAX_FOLD_DEPTH_CM)
+}
+
+/** Сечение одежды: обхват тела плюс запас; ткань повторяет выпуклости тела. */
 function dress(section: Section, easeCm: number): Section {
   return { ...section, girth: section.girth + clampEase(easeCm) }
+}
+
+/** Кольцо одежды: сечение с запасом, цвет и складки по этому запасу. */
+function dressRing(section: Section, easeCm: number, color: Rgb, foldBoost = 1): LoftRing {
+  return toRing(dress(section, easeCm), color, foldDepthFor(easeCm) * foldBoost)
 }
 
 /** Цвет кольца: товара или посадки ближайшей зоны с мягким переходом к цвету товара. */
@@ -160,23 +186,34 @@ function ringColor(y: number, eases: ZoneEase[], mode: ColorMode, product: Rgb, 
   return mixRgb(product, hexToRgb(FIT_HEX[nearest.fit]), weight)
 }
 
-/** Расклёшенный низ юбки или платья от линии бёдер до подола. */
-function hemSections(body: BodyModel, spec: GarmentSpec, eases: ZoneEase[]): Section[] {
+/**
+ * Расклёшенный низ юбки или платья от линии бёдер до подола.
+ * Чем ниже кольцо и шире клёш, тем глубже складки — ткань свободно висит.
+ */
+function hemRings(
+  body: BodyModel,
+  spec: GarmentSpec,
+  eases: ZoneEase[],
+  color: (y: number) => Rgb,
+): LoftRing[] {
   const hem = spec.hem
   if (!hem) return []
   const { hipsY } = body.landmarks
-  const hipsSection = sectionAt(body.parts.torso.sections, hipsY)
-  const hipsGirth = dress(hipsSection, easeAt(eases, hipsY, spec.baseEaseCm)).girth
+  const hipsEase = easeAt(eases, hipsY, spec.baseEaseCm)
+  const hipsGirth = dress(sectionAt(body.parts.torso.sections, hipsY), hipsEase).girth
   const hemY = hem.y(body.landmarks, body.heightCm)
   const steps = 4
   return Array.from({ length: steps }, (_, index) => {
     const t = (steps - index) / steps
-    return {
-      y: hipsY - (hipsY - hemY) * t,
-      girth: hipsGirth * (1 + hem.flare * t),
+    const y = hipsY - (hipsY - hemY) * t
+    const section: Section = {
+      y,
+      // Запас под ноги: клёш не должен касаться бёдер при шаге.
+      girth: hipsGirth * (1 + hem.flare * t) + SKIRT_LEG_ROOM_CM * t,
       depthRatio: 0.8,
       centerX: 0,
     }
+    return toRing(section, color(y), foldDepthFor(hipsEase) + hem.flare * 6 * t)
   })
 }
 
@@ -191,9 +228,11 @@ function limbParts(
   const h = body.heightCm
   const parts: GarmentPart[] = []
   const make = (sections: Section[], easeFor: (y: number) => number): GarmentPart => ({
-    rings: sections.map((section) => toRing(dress(section, easeFor(section.y)), color)),
+    rings: sections.map((section) => dressRing(section, easeFor(section.y), color)),
     capBottom: false,
     capTop: false,
+    foldCount: FOLDS.limb,
+    edgeThickness: FABRIC_EDGE_CM,
   })
   if (spec.sleeveBottom) {
     const bottom = spec.sleeveBottom(l, h)
@@ -204,13 +243,31 @@ function limbParts(
   }
   if (spec.legs) {
     const hipsEase = Math.max(easeAt(eases, l.hipsY, spec.baseEaseCm), 0)
-    const legEase = (y: number) =>
-      spec.baseEaseCm * 0.6 + hipsEase * 0.4 * ((y - l.ankleY) / (l.crotchY - l.ankleY))
+    // Свободные бёдра переходят в широкий верх штанины и плавно сходят к щиколотке.
+    const legEase = (y: number) => {
+      const t = Math.min(Math.max((y - l.ankleY) / (l.crotchY - l.ankleY), 0), 1)
+      return spec.baseEaseCm * 0.6 + hipsEase * 0.6 * t * t
+    }
     for (const leg of [body.parts.leftLeg, body.parts.rightLeg]) {
-      parts.push(make(sliceSections(leg.sections, l.ankleY, l.crotchY + 0.02 * h), legEase))
+      parts.push(make(sliceSections(leg.sections, l.ankleY, l.crotchY + 0.01 * h), legEase))
     }
   }
   return parts
+}
+
+/**
+ * Сечения тела под туловищной деталью. Ниже линии бёдер ткань висит прямо, а не повторяет
+ * сужение тела между ног, поэтому сечения не уже бёдер. У брюк деталь заканчивается в шаге,
+ * а ниже начинаются штанины.
+ */
+function garmentTorsoSections(body: BodyModel, bottom: number, top: number): Section[] {
+  const sections = sliceSections(body.parts.torso.sections, bottom, top)
+  const hips = sectionAt(body.parts.torso.sections, body.landmarks.hipsY)
+  return sections.map((section) =>
+    section.y < hips.y && section.girth < hips.girth
+      ? { ...section, girth: hips.girth, depthRatio: hips.depthRatio, features: hips.features }
+      : section,
+  )
 }
 
 /** Строит вещь выбранного размера на манекене. */
@@ -226,18 +283,26 @@ export function buildGarment(
   const product = hexToRgb(colorHex)
   const band = 0.06 * body.heightCm
   const [bottom, top] = spec.torso(body.landmarks, body.heightCm)
-  const torso = [
-    ...hemSections(body, spec, eases),
-    ...sliceSections(body.parts.torso.sections, bottom, top).map((section) =>
-      dress(section, easeAt(eases, section.y, spec.baseEaseCm)),
-    ),
-  ]
+  const colorAt = (y: number) => ringColor(y, eases, mode, product, band)
+  // У низа вещи складки глубже: ткань там ничем не удержана.
+  const hemBoost = (y: number) => (spec.legs ? 1 : 1 + 0.6 * Math.exp(-(y - bottom) / band))
   const torsoPart: GarmentPart = {
-    rings: torso.map((section) =>
-      toRing(section, ringColor(section.y, eases, mode, product, band)),
-    ),
+    rings: [
+      ...hemRings(body, spec, eases, colorAt),
+      ...garmentTorsoSections(body, bottom, top).map((section) =>
+        dressRing(
+          section,
+          easeAt(eases, section.y, spec.baseEaseCm),
+          colorAt(section.y),
+          hemBoost(section.y),
+        ),
+      ),
+    ],
     capBottom: false,
     capTop: false,
+    foldCount: spec.hem ? FOLDS.skirt : FOLDS.torso,
+    // У брюк низ туловищной детали спрятан в шаге — подгиб там не нужен.
+    edgeThickness: spec.legs ? 0 : FABRIC_EDGE_CM,
   }
   // Рукава и штанины вне зон сетки, поэтому всегда в цвете товара.
   return [torsoPart, ...limbParts(body, spec, eases, product)]
