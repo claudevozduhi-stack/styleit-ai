@@ -1,54 +1,25 @@
-// Результат ИИ-стилиста: образы, размеры, смета и ссылки на магазины.
-import { Box, ExternalLink } from 'lucide-react'
+// Результат ИИ-стилиста: вещи капсулы, лучшие образы из них, смета и ссылки на магазины.
 import { Link } from 'react-router-dom'
-import { Swatch } from '../components/Swatch'
+import { ItemCard } from '../features/capsule/ItemCard'
+import { OutfitCard } from '../features/capsule/OutfitCard'
 import { formatKzt } from '../features/capsule/labels'
-import { loadCapsule } from '../storage/localStore'
-import type { Confidence, LookItem } from '../types/analysis'
+import { bestOutfits, capsuleItems } from '../features/capsule/outfits'
+import { loadCapsule, loadColorType } from '../storage/localStore'
+import type { Estimate } from '../types/analysis'
 
-const CONFIDENCE_LABELS: Record<Confidence, string> = {
-  high: 'точно подходит',
-  medium: 'может сидеть неидеально',
-  low: 'плохо подходит',
-}
-
-/** Карточка вещи: вместо фото магазина — образец цвета (фото защищены авторским правом). */
-function ItemCard({ item }: { item: LookItem }) {
-  const { product } = item
+/** Итог сметы: каждая вещь считается один раз. */
+function EstimateCard({ estimate }: { estimate: Estimate }) {
   return (
-    <li className="flex gap-3 rounded-lg border border-neutral-200 bg-white p-3">
-      <Swatch color={product.color_hex} label={product.color_name} />
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="font-medium">{product.title}</p>
-        <p className="text-sm text-neutral-600">
-          {product.brand} · {product.store} · {product.color_name}
-        </p>
-        <p className="text-sm">
-          Размер <strong>{item.recommended_size}</strong> —{' '}
-          {CONFIDENCE_LABELS[item.size_confidence]}
-        </p>
-        {item.size_confidence !== 'high' && (
-          <p className="text-xs text-neutral-500">{item.size_note}</p>
-        )}
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-semibold">{formatKzt(product.price_kzt)}</span>
-          <Link
-            to={`/fitting/${product.id}`}
-            className="inline-flex items-center gap-1 text-brand underline"
-          >
-            Примерить в 3D <Box className="h-3 w-3" aria-hidden />
-          </Link>
-          <a
-            href={product.product_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-brand underline"
-          >
-            В магазин <ExternalLink className="h-3 w-3" aria-hidden />
-          </a>
-        </div>
-      </div>
-    </li>
+    <aside className="rounded-lg bg-white p-4 shadow-sm">
+      <h2 className="font-semibold">Смета</h2>
+      <p>
+        {estimate.items_count} вещей на {formatKzt(estimate.total_kzt)} из{' '}
+        {formatKzt(estimate.budget_kzt)}.
+        {estimate.within_budget
+          ? ` Остаётся ${formatKzt(estimate.remaining_kzt)}.`
+          : ' Бюджет превышен.'}
+      </p>
+    </aside>
   )
 }
 
@@ -66,7 +37,9 @@ export function CapsulePage() {
       </p>
     )
   }
-  const { estimate } = capsule
+  const items = capsuleItems(capsule)
+  // Палитра цветотипа повышает оценку образов в «ваших» цветах; без неё оценка нейтральна.
+  const outfits = bestOutfits(capsule, loadColorType()?.palette_hex ?? [])
   return (
     <section className="space-y-6">
       <header className="space-y-2">
@@ -76,32 +49,31 @@ export function CapsulePage() {
         </p>
         <p className="text-sm text-neutral-600">{capsule.fit_advice}</p>
       </header>
-      {capsule.looks.map((look) => (
-        <article key={look.title} className="space-y-3">
-          <h2 className="text-lg font-semibold">
-            {look.title}{' '}
-            <span className="text-sm font-normal text-neutral-500">
-              · {formatKzt(look.total_kzt)}
-            </span>
-          </h2>
-          <p className="text-sm text-neutral-700">{look.explanation}</p>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {look.items.map((item) => (
-              <ItemCard key={item.product.id} item={item} />
-            ))}
-          </ul>
-        </article>
-      ))}
-      <aside className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="font-semibold">Смета</h2>
-        <p>
-          {estimate.items_count} вещей на {formatKzt(estimate.total_kzt)} из{' '}
-          {formatKzt(estimate.budget_kzt)}.
-          {estimate.within_budget
-            ? ` Остаётся ${formatKzt(estimate.remaining_kzt)}.`
-            : ' Бюджет превышен.'}
+      <section className="space-y-3" aria-labelledby="capsule-items">
+        <h2 id="capsule-items" className="text-lg font-semibold">
+          Вещи капсулы
+        </h2>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {items.map((item) => (
+            <ItemCard key={item.product.id} item={item} />
+          ))}
+        </ul>
+      </section>
+      <section className="space-y-3" aria-labelledby="best-outfits">
+        <h2 id="best-outfits" className="text-lg font-semibold">
+          Лучшие образы
+        </h2>
+        <p className="text-sm text-neutral-600">
+          Сочетания из вещей капсулы: образы стилиста и подборки по размеру, цвету и стилю. Нажмите
+          на образ, чтобы увидеть его целиком на манекене.
         </p>
-      </aside>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {outfits.map((outfit) => (
+            <OutfitCard key={outfit.id} outfit={outfit} />
+          ))}
+        </ul>
+      </section>
+      <EstimateCard estimate={capsule.estimate} />
       <p className="text-xs text-neutral-500">{capsule.disclaimer}</p>
     </section>
   )

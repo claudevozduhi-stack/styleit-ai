@@ -10,9 +10,9 @@ import { FittingRoomPage } from './FittingRoomPage'
 
 // В jsdom нет WebGL, поэтому 3D-сцену подменяем: проверяем, какой размер и режим ей передан.
 vi.mock('../features/fitting/FittingScene', () => ({
-  default: ({ option, colorMode }: { option: SizeOption; colorMode: string }) => (
+  default: ({ garments, colorMode }: { garments: { option: SizeOption }[]; colorMode: string }) => (
     <div data-testid="scene">
-      {option.size_label}:{colorMode}
+      {garments.map((garment) => garment.option.size_label).join(',')}:{colorMode}
     </div>
   ),
 }))

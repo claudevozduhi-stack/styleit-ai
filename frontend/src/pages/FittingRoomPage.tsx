@@ -1,10 +1,11 @@
 // 3D-примерочная: манекен по меркам и вещь из капсулы в любом размере сетки.
 import { useQuery } from '@tanstack/react-query'
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { FitPanel } from '../features/fitting/FitPanel'
 import type { ColorMode } from '../features/fitting/garment'
+import type { SceneGarment } from '../features/fitting/layers'
 import { loadCapsule, loadMeasurements } from '../storage/localStore'
 import type { SizeOption } from '../types/analysis'
 import type { Product } from '../types/catalog'
@@ -45,6 +46,15 @@ export function FittingRoomPage() {
     queryFn: () => api.recommendSize(productId, measurements!),
     enabled: Boolean(measurements && product),
   })
+  const selected = picked ?? query.data?.recommended
+  // Один массив на выбранный размер, чтобы 3D-сетка не пересчитывалась при каждом рендере.
+  const garments = useMemo<SceneGarment[]>(
+    () =>
+      product && selected
+        ? [{ category: product.category, colorHex: product.color_hex, option: selected }]
+        : [],
+    [product, selected],
+  )
 
   if (!measurements) return <Notice text="Сначала" to="/measurements" link="введите мерки" />
   if (!product) {
@@ -54,7 +64,7 @@ export function FittingRoomPage() {
   if (query.isError) return <p role="alert">Не удалось подобрать размер: {query.error.message}</p>
 
   const recommendation = query.data
-  const selected = picked ?? recommendation.recommended
+  const chosen = selected ?? recommendation.recommended
   return (
     <section className="space-y-4">
       <header className="space-y-1">
@@ -66,19 +76,13 @@ export function FittingRoomPage() {
       <div className="grid gap-4 md:grid-cols-[3fr_2fr]">
         <div className="h-[420px] overflow-hidden rounded-lg bg-white shadow-sm md:h-[560px]">
           <Suspense fallback={<p className="p-4">Загружаем 3D…</p>}>
-            <FittingScene
-              measurements={measurements}
-              category={product.category}
-              colorHex={product.color_hex}
-              option={selected}
-              colorMode={colorMode}
-            />
+            <FittingScene measurements={measurements} garments={garments} colorMode={colorMode} />
           </Suspense>
         </div>
         <FitPanel
           options={recommendation.options}
           recommendedLabel={recommendation.recommended.size_label}
-          selected={selected}
+          selected={chosen}
           onSelect={setPicked}
           colorMode={colorMode}
           onColorModeChange={setColorMode}
