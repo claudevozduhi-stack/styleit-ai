@@ -134,3 +134,22 @@ function rayHit(origin: Point2, direction: Point2, start: Point2, end: Point2): 
   const along = (offset[0] * direction[1] - offset[1] * direction[0]) / denominator
   return distance >= 0 && along >= -1e-9 && along <= 1 + 1e-9 ? distance : null
 }
+
+/**
+ * Сглаживает контур по окружности (фильтр [1, 2, 1] по соседним направлениям): у
+ * выпуклой оболочки по направлениям видны изломы в её вершинах, и блик на ткани ложится
+ * пятнами. Сглаживание чуть уменьшает выступы, поэтому радиус не опускается ниже доли
+ * исходного (keep).
+ */
+export function smoothAround(radii: number[], passes: number, keep = 0.99): number[] {
+  let current = radii
+  for (let pass = 0; pass < passes; pass += 1) {
+    const previous = current
+    current = previous.map((radius, k) => {
+      const before = previous[(k - 1 + previous.length) % previous.length] as number
+      const after = previous[(k + 1) % previous.length] as number
+      return 0.25 * before + 0.5 * radius + 0.25 * after
+    })
+  }
+  return current.map((radius, k) => Math.max(radius, (radii[k] as number) * keep))
+}

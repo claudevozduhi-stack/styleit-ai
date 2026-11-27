@@ -19,7 +19,6 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { Measurements } from '../../types/body'
-import type { Category } from '../../types/catalog'
 import type { MeshData } from '../avatar/loft'
 import { fitHuman } from '../avatar/humanFit'
 import { loadHumanModel } from '../avatar/humanLoader'
@@ -27,16 +26,20 @@ import { humanMeshData } from '../avatar/humanMesh'
 import type { HumanModel } from '../avatar/humanModel'
 import { humanBodyModel } from '../avatar/humanSections'
 import { buildBodyModel, type BodyModel } from '../avatar/sections'
-import { MANNEQUIN_HEX, hexToRgb } from './colors'
-import { CATEGORY_FABRIC, FABRIC_TEXTURE_SIZE, fabricBumpMap, type FabricKind } from './fabric'
+import { MANNEQUIN_HEX, hexToRgb, srgbToLinear } from './colors'
+import {
+  FABRIC_LOOK,
+  FABRIC_TEXTURE_SIZE,
+  fabricBumpMap,
+  fabricFor,
+  type FabricKind,
+} from './fabric'
 import type { ColorMode } from './garment'
 import { buildOutfit, type SceneGarment } from './layers'
 import { bodyMeshes, garmentMeshes } from './scene'
 
 /** Сантиметры модели → метры сцены. */
 const CM_TO_M = 0.01
-/** Сколько раз фактура повторяется по окружности детали. */
-const FABRIC_REPEAT_AROUND = 10
 const BACKGROUND_HEX = '#f3f1ee'
 
 export interface FittingSceneProps {
@@ -52,7 +55,8 @@ function useGeometry(data: MeshData): BufferGeometry {
     const result = new BufferGeometry()
     result.setAttribute('position', new BufferAttribute(data.positions, 3))
     result.setAttribute('normal', new BufferAttribute(data.normals, 3))
-    result.setAttribute('color', new BufferAttribute(data.colors, 3))
+    // Цвета вершин заданы в sRGB, а свет считается в линейном пространстве.
+    result.setAttribute('color', new BufferAttribute(data.colors.map(srgbToLinear), 3))
     result.setAttribute('uv', new BufferAttribute(data.uvs, 2))
     result.setIndex(new BufferAttribute(data.indices, 1))
     return result
@@ -68,7 +72,7 @@ function useFabricTexture(kind: FabricKind): Texture {
     const result = new DataTexture(fabricBumpMap(kind, size), size, size, RGBAFormat)
     result.wrapS = RepeatWrapping
     result.wrapT = RepeatWrapping
-    result.repeat.set(FABRIC_REPEAT_AROUND, 1)
+    result.repeat.set(FABRIC_LOOK[kind].repeatAround, 1)
     // Мипмапы убирают муар фактуры на удалении камеры.
     result.generateMipmaps = true
     result.minFilter = LinearMipmapLinearFilter
@@ -90,32 +94,36 @@ function BodyMesh({ data }: { data: MeshData }) {
   )
 }
 
-/** Ткань: мягкий «бархатный» отблеск (sheen) и рельеф переплетения. */
-function GarmentMesh({ data, fabric }: { data: MeshData; fabric: Texture }) {
+/** Ткань: отблеск ворса (sheen), у кожи — лаковый слой, и рельеф переплетения. */
+function GarmentMesh({ data, kind, bump }: { data: MeshData; kind: FabricKind; bump: Texture }) {
   const geometry = useGeometry(data)
+  const look = FABRIC_LOOK[kind]
   return (
     <mesh geometry={geometry} castShadow receiveShadow>
       <meshPhysicalMaterial
         vertexColors
         side={DoubleSide}
-        roughness={0.85}
-        sheen={0.7}
-        sheenRoughness={0.6}
+        roughness={look.roughness}
+        sheen={look.sheen}
+        sheenRoughness={look.sheenRoughness}
         sheenColor="#ffffff"
-        bumpMap={fabric}
-        bumpScale={0.08}
+        clearcoat={look.clearcoat}
+        clearcoatRoughness={look.clearcoatRoughness}
+        bumpMap={bump}
+        bumpScale={look.bumpScale}
       />
     </mesh>
   )
 }
 
-/** Все детали одной вещи с фактурой ткани её категории. */
-function GarmentGroup({ parts, category }: { parts: MeshData[]; category: Category }) {
-  const fabric = useFabricTexture(CATEGORY_FABRIC[category])
+/** Все детали одной вещи с тканью по её названию или категории. */
+function GarmentGroup({ parts, garment }: { parts: MeshData[]; garment: SceneGarment }) {
+  const kind = fabricFor(garment.category, garment.title)
+  const bump = useFabricTexture(kind)
   return (
     <>
       {parts.map((data, index) => (
-        <GarmentMesh key={index} data={data} fabric={fabric} />
+        <GarmentMesh key={index} data={data} kind={kind} bump={bump} />
       ))}
     </>
   )
@@ -139,7 +147,12 @@ function CameraControls({ targetY }: { targetY: number }) {
 }
 
 /** Сила отражённого света «студии»: мягкие блики и тени в складках, как на фото. */
-const ENVIRONMENT_INTENSITY = 0.25
+const ENVIRONMENT_INTENSITY = 0.35
+/**
+ * Размытие окружения: панели света «комнаты» не отражаются в ткани прямоугольными
+ * бликами в клетку, остаётся только мягкий рассеянный свет.
+ */
+const ENVIRONMENT_BLUR = 0.4
 
 /**
  * Окружение-«комната» из three.js (генерируется кодом, без внешних файлов): даёт
@@ -151,7 +164,7 @@ function StudioEnvironment() {
   useEffect(() => {
     const generator = new PMREMGenerator(renderer)
     const room = new RoomEnvironment()
-    const target = generator.fromScene(room, 0.04)
+    const target = generator.fromScene(room, ENVIRONMENT_BLUR)
     scene.environment = target.texture
     scene.environmentIntensity = ENVIRONMENT_INTENSITY
     room.dispose()
@@ -164,14 +177,17 @@ function StudioEnvironment() {
   return null
 }
 
-/** Студийный свет: мягкий общий, основной с тенью, заполняющий и контровой. */
+/**
+ * Мягкий студийный свет: сильнее рассеянный свет комнаты, основной свет слабее и с
+ * размытой тенью, поэтому на ткани нет резких теней от рук, а складки видны.
+ */
 function StudioLights({ height }: { height: number }) {
   return (
     <>
-      <hemisphereLight args={['#ffffff', '#d8cfc4', 0.35]} />
+      <hemisphereLight args={['#ffffff', '#d8cfc4', 0.45]} />
       <directionalLight
         position={[1.5, height + 1.5, 2]}
-        intensity={1.5}
+        intensity={1.25}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -181,9 +197,9 @@ function StudioLights({ height }: { height: number }) {
         shadow-camera-bottom={-0.2}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
-        shadow-radius={6}
+        shadow-radius={10}
       />
-      <directionalLight position={[-2, height, 1]} intensity={0.5} />
+      <directionalLight position={[-2, height, 1]} intensity={0.6} />
       <directionalLight position={[0, height + 0.5, -2.5]} intensity={0.7} />
     </>
   )
@@ -240,7 +256,7 @@ export default function FittingScene(props: FittingSceneProps) {
           <GarmentGroup
             key={`garment-${index}`}
             parts={parts}
-            category={(garments[index] as SceneGarment).category}
+            garment={garments[index] as SceneGarment}
           />
         ))}
       </group>

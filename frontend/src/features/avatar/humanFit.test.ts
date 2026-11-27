@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { testHumanModel as model } from '../../tests/humanModelFixture'
 import type { Measurements } from '../../types/body'
 import { fitHuman } from './humanFit'
-import { PART } from './humanModel'
+import { PART, jointPosition } from './humanModel'
 import { girthAt, trianglesOf } from './meshSlice'
 
 const female: Measurements = {
@@ -61,4 +61,14 @@ describe('подгонка под мерки', () => {
       expect(girthAt(fitted.positions, hips, fitted.zoneY.hips)).toBeCloseTo(m.hipsCm, -0.3)
     })
   }
+})
+
+describe('поза манекена', () => {
+  it('стопы стоят ближе, чем в широкой стойке MakeHuman, но не сходятся', () => {
+    const fitted = fitHuman(model, female)
+    const ankle = jointPosition(model, fitted.positions, 'l-ankle')
+    const hip = jointPosition(model, fitted.positions, 'l-upper-leg')
+    expect(ankle[0] - hip[0]).toBeLessThan(3)
+    expect(ankle[0]).toBeGreaterThan(5)
+  })
 })

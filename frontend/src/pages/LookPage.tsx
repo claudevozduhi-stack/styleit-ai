@@ -75,6 +75,7 @@ export function LookPage() {
     return outfit.items.map((item, index) => ({
       category: item.product.category,
       colorHex: item.product.color_hex,
+      title: item.product.title,
       option: picked[item.product.id] ?? (recommendations[index] as SizeRecommendation).recommended,
     }))
   }, [outfit, sizes.data, picked])

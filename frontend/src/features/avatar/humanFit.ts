@@ -1,11 +1,20 @@
 // Подгонка анатомического тела под мерки: пол и вес, рост, затем обхваты груди, талии и бёдер.
 // Обхваты меряются «сантиметром» — по выпуклой оболочке горизонтального сечения тела.
 import type { Measurements } from '../../types/body'
-import { PART, applyMorphs, jointPosition, lowerArms, type HumanModel } from './humanModel'
+import {
+  PART,
+  applyMorphs,
+  closeLegs,
+  jointPosition,
+  lowerArms,
+  type HumanModel,
+} from './humanModel'
 import { girthAt, slicePoints, trianglesOf, type TriangleSet } from './meshSlice'
 
 /** Насколько опустить руки из A-позы MakeHuman, рад (~14°): кисти не задевают юбку. */
 const ARM_LOWER_RAD = (14 * Math.PI) / 180
+/** Насколько свести ноги из широкой стойки MakeHuman, рад (~4°). */
+const LEG_CLOSE_RAD = (4 * Math.PI) / 180
 /** Индекс массы, при котором тело MakeHuman «среднее», и разброс до крайних морфов веса. */
 const AVERAGE_BMI = 21.5
 const BMI_SPAN = 8
@@ -149,6 +158,7 @@ function measureWeights(values: Record<Zone, number>): Record<string, number> {
 function shape(model: HumanModel, m: Measurements, measures: Record<Zone, number>): Float32Array {
   const positions = applyMorphs(model, { ...baseWeights(m), ...measureWeights(measures) })
   lowerArms(model, positions, ARM_LOWER_RAD)
+  closeLegs(model, positions, LEG_CLOSE_RAD)
   placeAndScale(model, positions, m.heightCm)
   return positions
 }

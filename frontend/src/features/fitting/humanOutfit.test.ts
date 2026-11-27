@@ -115,4 +115,18 @@ describe('одежда на теле по скану', () => {
       }
     }
   })
+
+  it('верх штанины доходит до края туловищной части брюк, без ступеньки', () => {
+    const jeans = buildGarment(body, 'jeans', option, '#3a5f8a', 'product')
+    const torso = jeans.find((part) => part.kind === 'torso')
+    const bottom = torso?.rings.reduce((low, ring) => (ring.y < low.y ? ring : low))
+    expect(bottom).toBeDefined()
+    const outerX = (ring: LoftRing, side: number) =>
+      Math.max(...ringPoints(ring, 0).map((point) => point[0] * side))
+    for (const leg of jeans.filter((part) => part.kind === 'leg')) {
+      const side = Math.sign(leg.rings[0]?.centerX ?? 0)
+      const top = leg.rings.reduce((high, ring) => (ring.y > high.y ? ring : high))
+      expect(outerX(top, side)).toBeGreaterThan(outerX(bottom as LoftRing, side) - 0.3)
+    }
+  })
 })
