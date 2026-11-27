@@ -62,7 +62,11 @@ export function LookPage() {
   const [colorMode, setColorMode] = useState<ColorMode>('product')
   const sizes = useOutfitSizes(outfit, measurements)
   // Переход с карточки внизу капсулы: открываем образ сверху, с манекена.
-  useEffect(() => window.scrollTo(0, 0), [outfitId])
+  // Фигурные скобки обязательны: в новых браузерах scrollTo возвращает Promise, а React
+  // принял бы его за функцию очистки эффекта и упал бы при уходе со страницы.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [outfitId])
 
   // Вещи уже отсортированы по слоям: низ или платье, верх, верхняя одежда.
   const garments = useMemo<SceneGarment[]>(() => {

@@ -12,6 +12,7 @@ import {
   type Section,
 } from '../avatar/sections'
 import { FIT_HEX, hexToRgb } from './colors'
+import { encloseRing } from './enclose'
 
 /** Режим раскраски: цвет товара или «тепловая карта» посадки. */
 export type ColorMode = 'product' | 'fit'
@@ -177,7 +178,10 @@ export function foldDepthFor(easeCm: number): number {
 
 /** Сечение одежды: обхват тела плюс запас; ткань повторяет выпуклости тела. */
 function dress(section: Section, easeCm: number): Section {
-  return { ...section, girth: section.girth + clampEase(easeCm) }
+  const ease = clampEase(easeCm)
+  // Контур со скана раздвигается наружу на ease / 2π: периметр растёт ровно на запас.
+  const radii = section.radii?.map((radius) => radius + ease / (2 * Math.PI))
+  return { ...section, girth: section.girth + ease, radii }
 }
 
 /** Кольцо одежды: сечение с запасом, цвет и складки по этому запасу. */
@@ -211,7 +215,8 @@ function hemRings(
   if (!hem) return []
   const { hipsY } = body.landmarks
   const hipsEase = easeAt(eases, hipsY, spec.baseEaseCm)
-  const hipsGirth = dress(sectionAt(body.parts.torso.sections, hipsY), hipsEase).girth
+  const hips = sectionAt(body.parts.torso.sections, hipsY)
+  const hipsGirth = dress(hips, hipsEase).girth
   const hemY = hem.y(body.landmarks, body.heightCm)
   const steps = 4
   return Array.from({ length: steps }, (_, index) => {
@@ -223,8 +228,21 @@ function hemRings(
       girth: hipsGirth * (1 + hem.flare * t) + SKIRT_LEG_ROOM_CM * t,
       depthRatio: 0.8,
       centerX: 0,
+      centerZ: hips.centerZ,
     }
-    return toRing(section, color(y), foldDepthFor(hipsEase) + hem.flare * 6 * t)
+    const ring = toRing(section, color(y), foldDepthFor(hipsEase) + hem.flare * 6 * t)
+    return encloseRing(ring, bodyRingsAt(body, y), clampEase(hipsEase) / (2 * Math.PI))
+  })
+}
+
+/** Кольца тела на высоте y: туловище и ноги, если сечение там есть (для юбки поверх ног). */
+function bodyRingsAt(body: BodyModel, y: number): LoftRing[] {
+  const { torso, leftLeg, rightLeg } = body.parts
+  return [torso, leftLeg, rightLeg].flatMap((part) => {
+    const first = part.sections[0]
+    const last = part.sections[part.sections.length - 1]
+    if (!first || !last || y < first.y || y > last.y) return []
+    return [toRing(sectionAt(part.sections, y), [0, 0, 0])]
   })
 }
 
@@ -287,6 +305,29 @@ function limbParts(
 }
 
 /**
+ * Насколько быстро ткань может прижиматься к телу ниже груди, см контура на см высоты:
+ * ткань не облегает впадину под грудью, а свисает с неё и плавно подходит к талии.
+ */
+const DRAPE_SLOPE = 0.4
+
+/** Ниже груди контур сужается не круче DRAPE_SLOPE (только у сечений со скана). */
+function drapeBelowChest(sections: Section[], chestY: number): Section[] {
+  const result = [...sections]
+  for (let index = result.length - 2; index >= 0; index -= 1) {
+    const section = result[index] as Section
+    const above = result[index + 1] as Section
+    if (above.y > chestY + 0.5 || !section.radii || !above.radii) continue
+    const drop = DRAPE_SLOPE * (above.y - section.y)
+    const aboveRadii = above.radii
+    result[index] = {
+      ...section,
+      radii: section.radii.map((radius, k) => Math.max(radius, (aboveRadii[k] as number) - drop)),
+    }
+  }
+  return result
+}
+
+/**
  * Сечения тела под туловищной деталью. Ниже линии бёдер ткань висит прямо, а не повторяет
  * сужение тела между ног, поэтому сечения не уже бёдер. У брюк деталь заканчивается чуть
  * выше шага куполом шагового шва и закрывает верх штанин.
@@ -294,12 +335,44 @@ function limbParts(
 function garmentTorsoSections(body: BodyModel, bottom: number, top: number): Section[] {
   const sections = sliceSections(body.parts.torso.sections, bottom, top)
   const hips = sectionAt(body.parts.torso.sections, body.landmarks.hipsY)
-  return sections.map((section) => {
+  const hanging = sections.map((section) => {
     if (section.y >= hips.y) return section
     return section.girth < hips.girth
-      ? { ...section, girth: hips.girth, depthRatio: hips.depthRatio, features: hips.features }
+      ? {
+          ...section,
+          girth: hips.girth,
+          depthRatio: hips.depthRatio,
+          features: hips.features,
+          centerX: hips.centerX,
+          centerZ: hips.centerZ,
+          radii: hips.radii,
+        }
       : section
   })
+  return smoothRadii(drapeBelowChest(hanging, body.landmarks.chestY))
+}
+
+/** Сколько раз сглаживать контур по высоте: ткань не повторяет мелкие перепады тела. */
+const SMOOTH_PASSES = 3
+
+/** Сглаживает контуры сечений со скана по высоте (крайние сечения не трогаются). */
+function smoothRadii(sections: Section[]): Section[] {
+  let current = sections
+  for (let pass = 0; pass < SMOOTH_PASSES; pass += 1) {
+    const previous = current
+    current = previous.map((section, index) => {
+      const below = previous[index - 1]?.radii
+      const above = previous[index + 1]?.radii
+      if (!section.radii || !below || !above) return section
+      return {
+        ...section,
+        radii: section.radii.map(
+          (radius, k) => 0.25 * (below[k] as number) + 0.5 * radius + 0.25 * (above[k] as number),
+        ),
+      }
+    })
+  }
+  return current
 }
 
 /** Строит вещь выбранного размера на манекене. */

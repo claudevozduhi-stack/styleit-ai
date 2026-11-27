@@ -1,6 +1,8 @@
-// 3D-сцена примерочной: процедурный манекен по меркам и одна или несколько вещей слоями.
+// 3D-сцена примерочной: анатомическое тело по меркам (MakeHuman, CC0) и вещи слоями.
+// Пока файл модели грузится или если он недоступен, показывается процедурный манекен.
 // Загружается лениво (React.lazy), чтобы three.js не утяжелял остальные страницы.
 import { Canvas, useThree } from '@react-three/fiber'
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
 import {
   BufferAttribute,
@@ -19,7 +21,13 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import type { Measurements } from '../../types/body'
 import type { Category } from '../../types/catalog'
 import type { MeshData } from '../avatar/loft'
-import { buildBodyModel } from '../avatar/sections'
+import { fitHuman } from '../avatar/humanFit'
+import { loadHumanModel } from '../avatar/humanLoader'
+import { humanMeshData } from '../avatar/humanMesh'
+import type { HumanModel } from '../avatar/humanModel'
+import { humanBodyModel } from '../avatar/humanSections'
+import { buildBodyModel, type BodyModel } from '../avatar/sections'
+import { MANNEQUIN_HEX, hexToRgb } from './colors'
 import { CATEGORY_FABRIC, FABRIC_TEXTURE_SIZE, fabricBumpMap, type FabricKind } from './fabric'
 import type { ColorMode } from './garment'
 import { buildOutfit, type SceneGarment } from './layers'
@@ -181,11 +189,34 @@ function StudioLights({ height }: { height: number }) {
   )
 }
 
+/** Модель тела и его сетки: подогнанный скан, если модель загружена, иначе процедурный манекен. */
+function sceneBody(
+  measurements: Measurements,
+  model: HumanModel | undefined,
+): { body: BodyModel; bodyData: MeshData[] } {
+  if (!model) {
+    const body = buildBodyModel(measurements)
+    return { body, bodyData: bodyMeshes(body) }
+  }
+  const fitted = fitHuman(model, measurements)
+  return {
+    body: humanBodyModel(model, fitted),
+    bodyData: [humanMeshData(model, fitted.positions, hexToRgb(MANNEQUIN_HEX))],
+  }
+}
+
 /** Сцена: свет, пол с мягкой тенью, манекен, вещи и вращение камеры пальцем или мышью. */
 export default function FittingScene(props: FittingSceneProps) {
   const { measurements, garments, colorMode } = props
-  const body = useMemo(() => buildBodyModel(measurements), [measurements])
-  const bodyData = useMemo(() => bodyMeshes(body), [body])
+  const human = useQuery({
+    queryKey: ['human-model'],
+    queryFn: () => loadHumanModel(),
+    staleTime: Infinity,
+  })
+  const { body, bodyData } = useMemo(
+    () => sceneBody(measurements, human.data),
+    [measurements, human.data],
+  )
   const garmentData = useMemo(
     () => buildOutfit(body, garments, colorMode).map((parts) => garmentMeshes(parts)),
     [body, garments, colorMode],

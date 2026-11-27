@@ -52,6 +52,11 @@ export interface OutlineInput {
   foldCount: number
   /** Сдвиг фазы складок, чтобы они «гуляли» по высоте, а не шли идеальными рёбрами. */
   foldPhase: number
+  /**
+   * Готовый контур: расстояние от центра по равным углам (с +X к +Z). Есть у сечений,
+   * снятых со скана тела; тогда эллипс и выпуклости не используются.
+   */
+  radii?: readonly number[]
 }
 
 /** Кратчайшая разница углов в диапазоне [−π, π]. */
@@ -93,6 +98,7 @@ export function outlineLength(points: Array<[number, number]>): number {
  * и никогда не уходит внутрь него.
  */
 export function ringOutline(input: OutlineInput, segments: number): Array<[number, number]> {
+  if (input.radii && input.radii.length === segments) return radialOutline(input, input.radii)
   const shaped: Array<[number, number]> = []
   for (let k = 0; k < segments; k += 1) {
     const angle = (2 * Math.PI * k) / segments
@@ -107,4 +113,33 @@ export function ringOutline(input: OutlineInput, segments: number): Array<[numbe
     const grow = (radius + fold) / radius
     return [input.centerX + x * scale * grow, input.centerZ + z * scale * grow]
   })
+}
+
+/** Складка ткани в направлении angle: откладывается только наружу. */
+function foldAt(input: OutlineInput, angle: number): number {
+  return input.foldDepth * 0.5 * (1 + Math.cos(input.foldCount * angle + input.foldPhase))
+}
+
+/** Контур по готовым радиусам со складками поверх. */
+function radialOutline(input: OutlineInput, radii: readonly number[]): Array<[number, number]> {
+  return radii.map((radius, k) => {
+    const angle = (2 * Math.PI * k) / radii.length
+    const grown = radius + foldAt(input, angle)
+    return [input.centerX + grown * Math.cos(angle), input.centerZ + grown * Math.sin(angle)]
+  })
+}
+
+/**
+ * Радиусы контура кольца по `segments` направлениям без складок: готовые или посчитанные
+ * из эллипса с выпуклостями. Нужны, чтобы смешивать кольца разного происхождения.
+ */
+export function outlineRadii(
+  input: Omit<OutlineInput, 'foldDepth' | 'foldCount' | 'foldPhase'>,
+  segments: number,
+): number[] {
+  if (input.radii && input.radii.length === segments) return [...input.radii]
+  const flat = { ...input, foldDepth: 0, foldCount: 0, foldPhase: 0, radii: undefined }
+  return ringOutline(flat, segments).map(([x, z]) =>
+    Math.hypot(x - input.centerX, z - input.centerZ),
+  )
 }
