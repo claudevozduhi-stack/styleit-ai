@@ -6,7 +6,7 @@ import { api } from '../api/client'
 import { ItemCard } from '../features/capsule/ItemCard'
 import { formatKzt } from '../features/capsule/labels'
 import { findOutfit, type Outfit } from '../features/capsule/outfits'
-import { ColorModeSwitch, SizeSwitcher } from '../features/fitting/FitPanel'
+import { ColorModeSwitch, SizeSwitcher, TightWarning } from '../features/fitting/FitPanel'
 import type { ColorMode } from '../features/fitting/garment'
 import type { SceneGarment } from '../features/fitting/layers'
 import { loadCapsule, loadColorType, loadMeasurements } from '../storage/localStore'
@@ -127,6 +127,10 @@ export function LookPage() {
                     onSelect={(option) =>
                       setPicked((current) => ({ ...current, [item.product.id]: option }))
                     }
+                  />
+                  <TightWarning
+                    selected={garments[index]?.option ?? recommendation.recommended}
+                    options={recommendation.options}
                   />
                 </div>
               )

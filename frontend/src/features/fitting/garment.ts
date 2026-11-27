@@ -12,6 +12,7 @@ import {
   type Section,
 } from '../avatar/sections'
 import { FIT_HEX, hexToRgb } from './colors'
+import { strainAt, zoneStrains, type ZoneStrain } from './strain'
 import { blendUnder, encloseRing, ringPoints } from './enclose'
 
 /** Режим раскраски: цвет товара или «тепловая карта» посадки. */
@@ -176,17 +177,32 @@ export function foldDepthFor(easeCm: number): number {
   return Math.min(Math.max((easeCm - 2) * FOLD_PER_EASE_CM, 0), MAX_FOLD_DEPTH_CM)
 }
 
+/**
+ * Наименьший отступ ткани от контура тела, см. Даже самый тесный размер лежит поверх тела:
+ * манекен не просвечивает между сечениями и на выпуклостях, а теснота видна по натяжению.
+ */
+export const RADIAL_CLEARANCE_CM = 0.5
+
 /** Сечение одежды: обхват тела плюс запас; ткань повторяет выпуклости тела. */
 function dress(section: Section, easeCm: number): Section {
   const ease = clampEase(easeCm)
   // Контур со скана раздвигается наружу на ease / 2π: периметр растёт ровно на запас.
-  const radii = section.radii?.map((radius) => radius + ease / (2 * Math.PI))
+  const offset = Math.max(ease / (2 * Math.PI), RADIAL_CLEARANCE_CM)
+  const radii = section.radii?.map((radius) => radius + offset)
   return { ...section, girth: section.girth + ease, radii }
 }
 
-/** Кольцо одежды: сечение с запасом, цвет и складки по этому запасу. */
-function dressRing(section: Section, easeCm: number, color: Rgb, foldBoost = 1): LoftRing {
-  return toRing(dress(section, easeCm), color, foldDepthFor(easeCm) * foldBoost)
+/** Кольцо одежды: сечение с запасом, цвет, складки по запасу и натяжение тесной зоны. */
+function dressRing(
+  section: Section,
+  easeCm: number,
+  color: Rgb,
+  foldBoost = 1,
+  strain = 0,
+): LoftRing {
+  // Натянутая ткань разглаживается: складки исчезают вместе с ростом натяжения.
+  const folds = foldDepthFor(easeCm) * foldBoost * (1 - strain)
+  return { ...toRing(dress(section, easeCm), color, folds), strain }
 }
 
 /** Цвет кольца: товара или посадки ближайшей зоны с мягким переходом к цвету товара. */
@@ -231,7 +247,8 @@ function hemRings(
       centerZ: hips.centerZ,
     }
     const ring = toRing(section, color(y), foldDepthFor(hipsEase) + hem.flare * 6 * t)
-    return encloseRing(ring, bodyRingsAt(body, y), clampEase(hipsEase) / (2 * Math.PI))
+    const clearance = Math.max(clampEase(hipsEase) / (2 * Math.PI), RADIAL_CLEARANCE_CM)
+    return encloseRing(ring, bodyRingsAt(body, y), clearance)
   })
 }
 
@@ -258,6 +275,7 @@ function limbParts(
   spec: GarmentSpec,
   eases: ZoneEase[],
   color: Rgb,
+  strains: ZoneStrain[],
 ): GarmentPart[] {
   const l = body.landmarks
   const h = body.heightCm
@@ -266,10 +284,13 @@ function limbParts(
     kind: GarmentPartKind,
     sections: Section[],
     easeFor: (y: number) => number,
+    strainFor: (y: number) => number,
     domeTop = 0,
   ): GarmentPart => ({
     kind,
-    rings: sections.map((section) => dressRing(section, easeFor(section.y), color)),
+    rings: sections.map((section) =>
+      dressRing(section, easeFor(section.y), color, 1, strainFor(section.y)),
+    ),
     capBottom: false,
     capTop: domeTop > 0,
     foldCount: FOLDS.limb,
@@ -284,7 +305,17 @@ function limbParts(
       // Рукав доходит до верха руки и закрывается окатом поверх плеча.
       const top = arm.sections[arm.sections.length - 1]?.y ?? l.shoulderY
       const sections = sliceSections(arm.sections, bottom, top)
-      parts.push(make('sleeve', sections, () => sleeveEase, SLEEVE_HEAD_DOME))
+      // Тесная грудь тянет и рукав, но слабее.
+      const sleeveStrain = strainAt(strains, l.chestY) * 0.5
+      parts.push(
+        make(
+          'sleeve',
+          sections,
+          () => sleeveEase,
+          () => sleeveStrain,
+          SLEEVE_HEAD_DOME,
+        ),
+      )
     }
   }
   if (spec.legs) {
@@ -297,7 +328,10 @@ function limbParts(
     for (const leg of [body.parts.leftLeg, body.parts.rightLeg]) {
       // Штанина доходит до верха бедра и закрыта плоско: верх спрятан под туловищной деталью.
       const legTop = leg.sections[leg.sections.length - 1]?.y ?? l.crotchY
-      const part = make('leg', sliceSections(leg.sections, l.ankleY, legTop), legEase)
+      // Тесные бёдра тянут верх штанины, к колену натяжение сходит на нет.
+      const legStrain = (y: number) =>
+        strainAt(strains, l.hipsY) * Math.min(Math.max((y - l.kneeY) / (l.crotchY - l.kneeY), 0), 1)
+      const part = make('leg', sliceSections(leg.sections, l.ankleY, legTop), legEase, legStrain)
       parts.push({ ...part, capTop: true })
     }
   }
@@ -349,7 +383,16 @@ function garmentTorsoSections(body: BodyModel, bottom: number, top: number): Sec
         }
       : section
   })
-  return smoothRadii(drapeBelowChest(hanging, body.landmarks.chestY))
+  const smooth = smoothRadii(drapeBelowChest(hanging, body.landmarks.chestY))
+  // Сглаживание не должно срезать выпуклости тела: контур не уже исходного сечения.
+  return smooth.map((section, index) => {
+    const original = hanging[index]?.radii
+    if (!section.radii || !original) return section
+    return {
+      ...section,
+      radii: section.radii.map((radius, k) => Math.max(radius, original[k] as number)),
+    }
+  })
 }
 
 /** Сколько раз сглаживать контур по высоте: ткань не повторяет мелкие перепады тела. */
@@ -411,6 +454,7 @@ export function buildGarment(
 ): GarmentPart[] {
   const spec = GARMENT_SPECS[category]
   const eases = zoneEases(option, body.landmarks, spec.baseEaseCm)
+  const strains = zoneStrains(option, body.landmarks)
   const product = hexToRgb(colorHex)
   const band = 0.06 * body.heightCm
   const [bottom, top] = spec.torso(body.landmarks, body.heightCm)
@@ -427,6 +471,7 @@ export function buildGarment(
           easeAt(eases, section.y, spec.baseEaseCm),
           colorAt(section.y),
           hemBoost(section.y),
+          strainAt(strains, section.y),
         ),
       ),
     ],
@@ -439,6 +484,6 @@ export function buildGarment(
     domeBottom: spec.legs ? CROTCH_DOME : 0,
   }
   // Рукава и штанины вне зон сетки, поэтому всегда в цвете товара.
-  const limbs = limbParts(body, spec, eases, product)
+  const limbs = limbParts(body, spec, eases, product, strains)
   return [torsoPart, ...(spec.legs ? joinLegsToTorso(limbs, torsoPart, body.heightCm) : limbs)]
 }

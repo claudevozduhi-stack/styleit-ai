@@ -2,6 +2,7 @@
 import type { SizeOption } from '../../types/analysis'
 import { FIT_HEX, FIT_LABELS } from './colors'
 import type { ColorMode } from './garment'
+import { tightWarning } from './strain'
 
 const ZONE_LABELS = { chest: 'Грудь', waist: 'Талия', hips: 'Бёдра', height: 'Рост' } as const
 
@@ -90,11 +91,32 @@ function ZoneTable({ selected }: { selected: SizeOption }) {
   )
 }
 
+/** Предупреждение, что выбранный размер мал для мерок; если размер подходит — ничего. */
+export function TightWarning({
+  selected,
+  options,
+}: {
+  selected: SizeOption
+  options: SizeOption[]
+}) {
+  const text = tightWarning(selected, options)
+  if (!text) return null
+  return (
+    <p
+      role="status"
+      className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+      ⚠ {text}
+    </p>
+  )
+}
+
 /** Панель рядом с 3D-сценой. */
 export function FitPanel(props: FitPanelProps) {
   return (
     <div className="space-y-4">
       <SizeSwitcher {...props} />
+      <TightWarning selected={props.selected} options={props.options} />
       <ColorModeSwitch {...props} />
       <ZoneTable selected={props.selected} />
       <p className="text-xs text-neutral-500">

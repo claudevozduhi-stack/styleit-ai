@@ -129,4 +129,37 @@ describe('одежда на теле по скану', () => {
       expect(outerX(top, side)).toBeGreaterThan(outerX(bottom as LoftRing, side) - 0.3)
     }
   })
+
+  it('тесный размер лежит поверх тела: манекен не просвечивает', () => {
+    const tight: SizeOption = {
+      ...option,
+      zones: option.zones.map((zone) => ({
+        ...zone,
+        size_min_cm: zone.body_cm - 15,
+        size_max_cm: zone.body_cm - 9,
+        fit: 'tight' as const,
+      })),
+    }
+    const torso = buildGarment(body, 'tshirt', tight, '#2f3a4a', 'product').find(
+      (part) => part.kind === 'torso',
+    )
+    expect(torso).toBeDefined()
+    for (const ring of torso?.rings ?? []) {
+      const section = body.parts.torso.sections.find((each) => Math.abs(each.y - ring.y) < 0.01)
+      if (!section?.radii) continue
+      const bodyRing: LoftRing = {
+        y: section.y,
+        a: 0,
+        b: 0,
+        centerX: section.centerX,
+        centerZ: section.centerZ ?? 0,
+        color: [0, 0, 0],
+        features: NO_FEATURES,
+        foldDepth: 0,
+        radii: section.radii,
+      }
+      for (const point of ringPoints(bodyRing, 0)) expect(inside(ring, point, 0)).toBe(true)
+      expect(ring.strain).toBeGreaterThan(0)
+    }
+  })
 })
