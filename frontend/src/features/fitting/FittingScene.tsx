@@ -1,4 +1,4 @@
-// 3D-сцена примерочной: процедурный манекен по меркам и вещь выбранного размера.
+// 3D-сцена примерочной: процедурный манекен по меркам и одна или несколько вещей слоями.
 // Загружается лениво (React.lazy), чтобы three.js не утяжелял остальные страницы.
 import { Canvas, useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
@@ -16,13 +16,13 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import type { SizeOption } from '../../types/analysis'
 import type { Measurements } from '../../types/body'
 import type { Category } from '../../types/catalog'
 import type { MeshData } from '../avatar/loft'
 import { buildBodyModel } from '../avatar/sections'
 import { CATEGORY_FABRIC, FABRIC_TEXTURE_SIZE, fabricBumpMap, type FabricKind } from './fabric'
-import { buildGarment, type ColorMode } from './garment'
+import type { ColorMode } from './garment'
+import { buildOutfit, type SceneGarment } from './layers'
 import { bodyMeshes, garmentMeshes } from './scene'
 
 /** Сантиметры модели → метры сцены. */
@@ -33,9 +33,8 @@ const BACKGROUND_HEX = '#f3f1ee'
 
 export interface FittingSceneProps {
   measurements: Measurements
-  category: Category
-  colorHex: string
-  option: SizeOption
+  /** Вещи снизу вверх по слоям: низ или платье, верх, верхняя одежда. */
+  garments: SceneGarment[]
   colorMode: ColorMode
 }
 
@@ -99,6 +98,18 @@ function GarmentMesh({ data, fabric }: { data: MeshData; fabric: Texture }) {
         bumpScale={0.08}
       />
     </mesh>
+  )
+}
+
+/** Все детали одной вещи с фактурой ткани её категории. */
+function GarmentGroup({ parts, category }: { parts: MeshData[]; category: Category }) {
+  const fabric = useFabricTexture(CATEGORY_FABRIC[category])
+  return (
+    <>
+      {parts.map((data, index) => (
+        <GarmentMesh key={index} data={data} fabric={fabric} />
+      ))}
+    </>
   )
 }
 
@@ -170,16 +181,15 @@ function StudioLights({ height }: { height: number }) {
   )
 }
 
-/** Сцена: свет, пол с мягкой тенью, манекен, вещь и вращение камеры пальцем или мышью. */
+/** Сцена: свет, пол с мягкой тенью, манекен, вещи и вращение камеры пальцем или мышью. */
 export default function FittingScene(props: FittingSceneProps) {
-  const { measurements, category, colorHex, option, colorMode } = props
+  const { measurements, garments, colorMode } = props
   const body = useMemo(() => buildBodyModel(measurements), [measurements])
   const bodyData = useMemo(() => bodyMeshes(body), [body])
   const garmentData = useMemo(
-    () => garmentMeshes(buildGarment(body, category, option, colorHex, colorMode)),
-    [body, category, option, colorHex, colorMode],
+    () => buildOutfit(body, garments, colorMode).map((parts) => garmentMeshes(parts)),
+    [body, garments, colorMode],
   )
-  const fabric = useFabricTexture(CATEGORY_FABRIC[category])
   const heightM = body.heightCm * CM_TO_M
   const centerY = heightM * 0.55
   return (
@@ -195,8 +205,12 @@ export default function FittingScene(props: FittingSceneProps) {
         {bodyData.map((data, index) => (
           <BodyMesh key={`body-${index}`} data={data} />
         ))}
-        {garmentData.map((data, index) => (
-          <GarmentMesh key={`garment-${index}`} data={data} fabric={fabric} />
+        {garmentData.map((parts, index) => (
+          <GarmentGroup
+            key={`garment-${index}`}
+            parts={parts}
+            category={(garments[index] as SceneGarment).category}
+          />
         ))}
       </group>
       <CameraControls targetY={centerY} />

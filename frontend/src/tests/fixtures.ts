@@ -1,5 +1,6 @@
 // Общие тестовые данные: вымышленный магазин и товары с адресами example.com.
-import type { Capsule } from '../types/analysis'
+import type { Capsule, LookItem } from '../types/analysis'
+import type { Product } from '../types/catalog'
 
 /** Капсула из одного образа с одной футболкой. */
 export const capsule: Capsule = {
@@ -42,6 +43,47 @@ export const capsule: Capsule = {
           },
         },
       ],
+    },
+  ],
+}
+
+/** Вещь капсулы на основе футболки из фикстуры с другой категорией, цветом и ценой. */
+function fixtureItem(
+  id: number,
+  title: string,
+  category: Product['category'],
+  colorHex: string,
+): LookItem {
+  const base = capsule.looks[0]!.items[0]!
+  return {
+    ...base,
+    product: {
+      ...base.product,
+      id,
+      title,
+      category,
+      color_hex: colorHex,
+      price_kzt: 5000 + id * 1000,
+      product_url: `https://example.com/p/${id}`,
+    },
+  }
+}
+
+const tshirtItem = capsule.looks[0]!.items[0]!
+const jeansItem = fixtureItem(2, 'Джинсы прямые', 'jeans', '#1f3a5f')
+const skirtItem = fixtureItem(3, 'Юбка миди', 'skirt', '#000000')
+const jacketItem = fixtureItem(4, 'Куртка лёгкая', 'jacket', '#808080')
+
+/** Капсула из двух образов стилиста: из неё код собирает ещё сочетания. */
+export const outfitCapsule: Capsule = {
+  ...capsule,
+  looks: [
+    { title: 'Город', explanation: 'Удобно.', items: [tshirtItem, jeansItem], total_kzt: 11990 },
+    {
+      title: 'Вечер',
+      explanation: 'Строго.',
+      items: [skirtItem, tshirtItem, jacketItem],
+      total_kzt: 22990,
     },
   ],
 }

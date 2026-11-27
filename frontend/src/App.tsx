@@ -5,6 +5,7 @@ import { CapsulePage } from './pages/CapsulePage'
 import { ColorTypePage } from './pages/ColorTypePage'
 import { FittingRoomPage } from './pages/FittingRoomPage'
 import { HomePage } from './pages/HomePage'
+import { LookPage } from './pages/LookPage'
 import { MeasurementsPage } from './pages/MeasurementsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { StylePage } from './pages/StylePage'
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/style" element={<StylePage />} />
         <Route path="/capsule" element={<CapsulePage />} />
         <Route path="/fitting/:productId" element={<FittingRoomPage />} />
+        <Route path="/looks/:outfitId" element={<LookPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="*" element={<p>Страница не найдена.</p>} />
       </Routes>

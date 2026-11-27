@@ -14,10 +14,20 @@ interface FitPanelProps {
   onColorModeChange: (mode: ColorMode) => void
 }
 
+interface SizeSwitcherProps {
+  options: SizeOption[]
+  recommendedLabel: string
+  selected: SizeOption
+  onSelect: (option: SizeOption) => void
+  /** Подпись группы для экранных дикторов (в образе — название вещи). */
+  label?: string
+}
+
 /** Кнопки размеров: рекомендованный отмечен звёздочкой, соседние сравниваются одним нажатием. */
-function SizeSwitcher({ options, recommendedLabel, selected, onSelect }: FitPanelProps) {
+export function SizeSwitcher(props: SizeSwitcherProps) {
+  const { options, recommendedLabel, selected, onSelect, label = 'Размер' } = props
   return (
-    <div role="group" aria-label="Размер" className="flex flex-wrap gap-2">
+    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
       {options.map((option) => {
         const active = option.size_label === selected.size_label
         return (
@@ -39,8 +49,13 @@ function SizeSwitcher({ options, recommendedLabel, selected, onSelect }: FitPane
   )
 }
 
+interface ColorModeSwitchProps {
+  colorMode: ColorMode
+  onColorModeChange: (mode: ColorMode) => void
+}
+
 /** Переключатель режима: цвет вещи или карта посадки. */
-function ColorModeSwitch({ colorMode, onColorModeChange }: FitPanelProps) {
+export function ColorModeSwitch({ colorMode, onColorModeChange }: ColorModeSwitchProps) {
   return (
     <label className="flex items-center gap-2 text-sm">
       <input

@@ -16,8 +16,12 @@ import { FIT_HEX, hexToRgb } from './colors'
 /** Режим раскраски: цвет товара или «тепловая карта» посадки. */
 export type ColorMode = 'product' | 'fit'
 
+/** Вид детали: туловище, рукав или штанина. Нужен, чтобы надевать вещи слоями. */
+export type GarmentPartKind = 'torso' | 'sleeve' | 'leg'
+
 /** Часть вещи, готовая к построению сетки. */
 export interface GarmentPart {
+  kind: GarmentPartKind
   rings: LoftRing[]
   capBottom: boolean
   capTop: boolean
@@ -240,7 +244,13 @@ function limbParts(
   const l = body.landmarks
   const h = body.heightCm
   const parts: GarmentPart[] = []
-  const make = (sections: Section[], easeFor: (y: number) => number, domeTop = 0): GarmentPart => ({
+  const make = (
+    kind: GarmentPartKind,
+    sections: Section[],
+    easeFor: (y: number) => number,
+    domeTop = 0,
+  ): GarmentPart => ({
+    kind,
     rings: sections.map((section) => dressRing(section, easeFor(section.y), color)),
     capBottom: false,
     capTop: domeTop > 0,
@@ -256,7 +266,7 @@ function limbParts(
       // Рукав доходит до верха руки и закрывается окатом поверх плеча.
       const top = arm.sections[arm.sections.length - 1]?.y ?? l.shoulderY
       const sections = sliceSections(arm.sections, bottom, top)
-      parts.push(make(sections, () => sleeveEase, SLEEVE_HEAD_DOME))
+      parts.push(make('sleeve', sections, () => sleeveEase, SLEEVE_HEAD_DOME))
     }
   }
   if (spec.legs) {
@@ -269,7 +279,7 @@ function limbParts(
     for (const leg of [body.parts.leftLeg, body.parts.rightLeg]) {
       // Штанина доходит до верха бедра и закрыта плоско: верх спрятан под туловищной деталью.
       const legTop = leg.sections[leg.sections.length - 1]?.y ?? l.crotchY
-      const part = make(sliceSections(leg.sections, l.ankleY, legTop), legEase)
+      const part = make('leg', sliceSections(leg.sections, l.ankleY, legTop), legEase)
       parts.push({ ...part, capTop: true })
     }
   }
@@ -309,6 +319,7 @@ export function buildGarment(
   // У низа вещи складки глубже: ткань там ничем не удержана.
   const hemBoost = (y: number) => (spec.legs ? 1 : 1 + 0.6 * Math.exp(-(y - bottom) / band))
   const torsoPart: GarmentPart = {
+    kind: 'torso',
     rings: [
       ...hemRings(body, spec, eases, colorAt),
       ...garmentTorsoSections(body, bottom, top).map((section) =>
