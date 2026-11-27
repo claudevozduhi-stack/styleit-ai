@@ -2,8 +2,8 @@
 // Каждое кольцо — эллипс с анатомическими выпуклостями и складками (см. profile.ts).
 import { ellipseForGirth } from './ellipse'
 import { addCap, buildGrid } from './loftGrid'
-import { NO_FEATURES, type Features } from './profile'
-import type { Section } from './sections'
+import { NO_FEATURES, outlineRadii, type Features } from './profile'
+import { mixRadii, type Section } from './sections'
 
 /** Цвет вершины в линейных долях 0..1. */
 export type Rgb = readonly [number, number, number]
@@ -19,6 +19,8 @@ export interface LoftRing {
   features: Features
   /** Глубина складок ткани в сантиметрах (у тела 0). */
   foldDepth: number
+  /** Готовый контур (радиусы по равным углам), если кольцо снято со сканированного тела. */
+  radii?: number[]
 }
 
 /** Данные сетки для BufferGeometry. Координаты в сантиметрах. */
@@ -86,7 +88,18 @@ export function toRing(section: Section, color: Rgb, foldDepth = 0): LoftRing {
     color,
     features: section.features ?? NO_FEATURES,
     foldDepth,
+    radii: section.radii,
   }
+}
+
+/** Контуры двух соседних колец в одном виде: если контур есть хотя бы у одного — у обоих. */
+function pairRadii(
+  first: LoftRing,
+  second: LoftRing,
+): [number[] | undefined, number[] | undefined] {
+  const segments = first.radii?.length ?? second.radii?.length
+  if (!segments) return [undefined, undefined]
+  return [outlineRadii(first, segments), outlineRadii(second, segments)]
 }
 
 /**
@@ -128,7 +141,9 @@ export function interpolateRings(rings: LoftRing[], stepsPerSpan: number): LoftR
     for (let step = 0; step < stepsPerSpan; step += 1) {
       const t = step / stepsPerSpan
       const pick = (key: SmoothKey) => smoothValue(r0[key], r1[key], r2[key], r3[key], t)
+      const [fromRadii, toRadii] = pairRadii(r1, r2)
       result.push({
+        radii: mixRadii(fromRadii, toRadii, t),
         y: pick('y'),
         a: pick('a'),
         b: pick('b'),
@@ -156,6 +171,7 @@ function hemRing(edge: LoftRing, thickness: number, direction: 1 | -1): LoftRing
     a: Math.max(edge.a - thickness, 0.1),
     b: Math.max(edge.b - thickness, 0.1),
     foldDepth: 0,
+    radii: edge.radii?.map((radius) => Math.max(radius - thickness, 0.1)),
   }
 }
 
@@ -176,6 +192,7 @@ export function domeRings(edge: LoftRing, dome: number, direction: 1 | -1): Loft
       a: edge.a * scale,
       b: edge.b * scale,
       foldDepth: edge.foldDepth * scale,
+      radii: edge.radii?.map((radius) => radius * scale),
     }
   })
   return direction === 1 ? rings : rings.reverse()

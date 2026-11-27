@@ -3,7 +3,10 @@
 import type { SizeOption } from '../../types/analysis'
 import type { Category } from '../../types/catalog'
 import type { LoftRing } from '../avatar/loft'
+import { outlineRadii } from '../avatar/profile'
+import { mixRadii } from '../avatar/sections'
 import type { BodyModel } from '../avatar/sections'
+import { ENCLOSE_SEGMENTS, encloseRing, withRadii } from './enclose'
 import { buildGarment, type ColorMode, type GarmentPart } from './garment'
 
 /** Вещь для сцены: категория, цвет и выбранный размер. */
@@ -36,6 +39,7 @@ function innerRingAt(rings: LoftRing[], y: number): LoftRing | null {
     centerX: mix(lower.centerX, upper.centerX),
     centerZ: mix(lower.centerZ, upper.centerZ),
     foldDepth: Math.max(lower.foldDepth, upper.foldDepth),
+    radii: mixRadii(lower.radii, upper.radii, t),
   }
 }
 
@@ -50,26 +54,51 @@ function covers(outer: GarmentPart, inner: GarmentPart): boolean {
   return side(outer) === side(inner)
 }
 
-/** Расширяет кольцо верхнего слоя так, чтобы кольцо нижнего целиком было внутри с зазором. */
-function encloseRing(ring: LoftRing, inner: LoftRing, gapCm: number): LoftRing {
-  const reach = (offset: number, axis: number) =>
-    Math.abs(offset) + axis + inner.foldDepth + ring.foldDepth + gapCm
-  const needA = reach(inner.centerX - ring.centerX, inner.a)
-  const needB = reach(inner.centerZ - ring.centerZ, inner.b)
-  return { ...ring, a: Math.max(ring.a, needA), b: Math.max(ring.b, needB) }
+/** Насколько быстро по высоте сходит на нет расширение над нижним слоем, см на см. */
+const LAYER_DRAPE_SLOPE = 0.15
+
+/**
+ * Расширение верхнего слоя над нижним (разница с исходным контуром) растекается по высоте:
+ * не меньше расширения любого кольца минус LAYER_DRAPE_SLOPE на каждый сантиметр между ними.
+ * Так ткань над поясом брюк или над штанинами спадает плавно, а не ступенькой, а форма
+ * самой вещи (плечи, горловина) не меняется там, где под ней ничего нет.
+ */
+function spreadAlongHeight(original: LoftRing[], enclosed: LoftRing[]): LoftRing[] {
+  const radii = (rings: LoftRing[]) => rings.map((ring) => outlineRadii(ring, ENCLOSE_SEGMENTS))
+  const base = radii(original)
+  const grown = radii(enclosed)
+  const deltas = grown.map((ring, index) =>
+    ring.map((radius, k) => radius - ((base[index] as number[])[k] as number)),
+  )
+  return enclosed.map((ring, index) => {
+    const spread = (base[index] as number[]).map((radius, k) => {
+      const delta = deltas.reduce(
+        (best, other, otherIndex) =>
+          Math.max(
+            best,
+            (other[k] as number) -
+              LAYER_DRAPE_SLOPE * Math.abs((enclosed[otherIndex] as LoftRing).y - ring.y),
+          ),
+        0,
+      )
+      return radius + delta
+    })
+    return withRadii(ring, spread)
+  })
 }
 
 /** Надевает деталь поверх всех деталей нижнего слоя, которые она закрывает. */
 function layerPart(outer: GarmentPart, under: GarmentPart[], gapCm: number): GarmentPart {
   const covered = under.filter((inner) => covers(outer, inner))
   if (covered.length === 0) return outer
-  const rings = outer.rings.map((ring) =>
-    covered.reduce((current, inner) => {
-      const innerRing = innerRingAt(inner.rings, ring.y)
-      return innerRing ? encloseRing(current, innerRing, gapCm) : current
-    }, ring),
-  )
-  return { ...outer, rings }
+  const rings = outer.rings.map((ring) => {
+    const inner = covered.flatMap((part) => {
+      const innerRing = innerRingAt(part.rings, ring.y)
+      return innerRing ? [innerRing] : []
+    })
+    return encloseRing(ring, inner, gapCm)
+  })
+  return { ...outer, rings: spreadAlongHeight(outer.rings, rings) }
 }
 
 /** Надевает вещь поверх уже надетых деталей. */

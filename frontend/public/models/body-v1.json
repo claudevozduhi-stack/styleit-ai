@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "source": {
+    "project": "MakeHuman (makehumancommunity.org)",
+    "commit": "a8bc2d54ff0ac92e78ff71431b1023eda42bf482",
+    "license": "CC0 1.0 Universal"
+  },
+  "unit": "cm",
+  "deltaStepCm": 0.01,
+  "vertexCount": 13380,
+  "joints": [
+    "neck",
+    "head",
+    "head-2",
+    "jaw",
+    "pelvis",
+    "spine-1",
+    "spine-2",
+    "spine-3",
+    "l-shoulder",
+    "r-shoulder",
+    "l-clavicle",
+    "r-clavicle",
+    "l-elbow",
+    "r-elbow",
+    "l-hand",
+    "r-hand",
+    "l-upper-leg",
+    "r-upper-leg",
+    "l-knee",
+    "r-knee",
+    "l-ankle",
+    "r-ankle",
+    "ground"
+  ],
+  "partIds": {
+    "torso": 0,
+    "head": 1,
+    "leftArm": 2,
+    "rightArm": 3,
+    "leftLeg": 4,
+    "rightLeg": 5
+  },
+  "layout": {
+    "positions": {
+      "offset": 0,
+      "count": 13403
+    },
+    "indices": {
+      "offset": 160836,
+      "count": 80268
+    },
+    "parts": {
+      "offset": 321372,
+      "count": 13380
+    },
+    "armWeights": {
+      "offset": 334752,
+      "count": 13380
+    }
+  },
+  "targets": {
+    "female": 348132,
+    "female-weight-min": 455352,
+    "female-weight-max": 487588,
+    "male": 514232,
+    "male-weight-min": 621452,
+    "male-weight-max": 650376,
+    "bust-decr": 679916,
+    "bust-incr": 689000,
+    "waist-decr": 697988,
+    "waist-incr": 704472,
+    "hips-decr": 710956,
+    "hips-incr": 716424,
+    "mannequin-female": 721948,
+    "mannequin-male": 757232
+  }
+}

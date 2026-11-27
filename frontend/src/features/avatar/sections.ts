@@ -27,6 +27,11 @@ export interface Section {
   features?: Features
   /** Зона размерной сетки, которой соответствует сечение. */
   zone?: BodyZone
+  /**
+   * Готовый контур сечения (радиусы от центра по равным углам), если сечение снято
+   * со сканированного тела. Обхват girth тогда равен периметру этого контура.
+   */
+  radii?: number[]
 }
 
 export type PartName = 'head' | 'torso' | 'leftLeg' | 'rightLeg' | 'leftArm' | 'rightArm'
@@ -133,7 +138,18 @@ export function sectionAt(sections: Section[], y: number): Section {
     centerX: lerp(lower.centerX, upper.centerX, t),
     centerZ: lerp(lower.centerZ ?? 0, upper.centerZ ?? 0, t),
     features: mixSectionFeatures(lower.features, upper.features, t),
+    radii: mixRadii(lower.radii, upper.radii, t),
   }
+}
+
+/** Смешивает контуры двух сечений; если у одного контура нет, результат без контура. */
+export function mixRadii(
+  from: readonly number[] | undefined,
+  to: readonly number[] | undefined,
+  t: number,
+): number[] | undefined {
+  if (!from || !to || from.length !== to.length) return undefined
+  return from.map((radius, index) => lerp(radius, to[index] as number, t))
 }
 
 /** Оставляет сечения в диапазоне высот [yMin, yMax], добавляя сечения точно на границах. */

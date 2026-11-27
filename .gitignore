@@ -25,3 +25,4 @@ frontend/playwright-report/
 # Артефакты сборки пакета (pip install .)
 build/
 *.egg-info/
+tools/.cache/

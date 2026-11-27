@@ -6,6 +6,8 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Бинарная модель тела (public/models/*.bin) в тестах читается как ресурс через ?inline.
+  assetsInclude: ['**/*.bin'],
   server: {
     // Кроме самого фронтенда разрешён только каталог размерных сеток (открытые цифры, без
     // персональных данных): тест sizePresets.test.ts сверяет с ним таблицу быстрого выбора.
