@@ -9,17 +9,18 @@ import {
   DoubleSide,
   LinearFilter,
   LinearMipmapLinearFilter,
+  PMREMGenerator,
   RepeatWrapping,
   RGBAFormat,
   type Texture,
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { SizeOption } from '../../types/analysis'
 import type { Measurements } from '../../types/body'
 import type { Category } from '../../types/catalog'
 import type { MeshData } from '../avatar/loft'
 import { buildBodyModel } from '../avatar/sections'
-import { MANNEQUIN_HEX } from './colors'
 import { CATEGORY_FABRIC, FABRIC_TEXTURE_SIZE, fabricBumpMap, type FabricKind } from './fabric'
 import { buildGarment, type ColorMode } from './garment'
 import { bodyMeshes, garmentMeshes } from './scene'
@@ -118,14 +119,40 @@ function CameraControls({ targetY }: { targetY: number }) {
   return null
 }
 
+/** Сила отражённого света «студии»: мягкие блики и тени в складках, как на фото. */
+const ENVIRONMENT_INTENSITY = 0.25
+
+/**
+ * Окружение-«комната» из three.js (генерируется кодом, без внешних файлов): даёт
+ * рассеянный отражённый свет со всех сторон, поэтому ткань и манекен выглядят объёмно.
+ */
+function StudioEnvironment() {
+  const renderer = useThree((state) => state.gl)
+  const scene = useThree((state) => state.scene)
+  useEffect(() => {
+    const generator = new PMREMGenerator(renderer)
+    const room = new RoomEnvironment()
+    const target = generator.fromScene(room, 0.04)
+    scene.environment = target.texture
+    scene.environmentIntensity = ENVIRONMENT_INTENSITY
+    room.dispose()
+    generator.dispose()
+    return () => {
+      scene.environment = null
+      target.dispose()
+    }
+  }, [renderer, scene])
+  return null
+}
+
 /** Студийный свет: мягкий общий, основной с тенью, заполняющий и контровой. */
 function StudioLights({ height }: { height: number }) {
   return (
     <>
-      <hemisphereLight args={['#ffffff', '#d8cfc4', 0.9]} />
+      <hemisphereLight args={['#ffffff', '#d8cfc4', 0.35]} />
       <directionalLight
         position={[1.5, height + 1.5, 2]}
-        intensity={1.8}
+        intensity={1.5}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -135,6 +162,7 @@ function StudioLights({ height }: { height: number }) {
         shadow-camera-bottom={-0.2}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
+        shadow-radius={6}
       />
       <directionalLight position={[-2, height, 1]} intensity={0.5} />
       <directionalLight position={[0, height + 0.5, -2.5]} intensity={0.7} />
@@ -154,10 +182,10 @@ export default function FittingScene(props: FittingSceneProps) {
   const fabric = useFabricTexture(CATEGORY_FABRIC[category])
   const heightM = body.heightCm * CM_TO_M
   const centerY = heightM * 0.55
-  const head = body.head
   return (
-    <Canvas shadows camera={{ position: [0, centerY, 2.6], fov: 40 }} dpr={[1, 2]}>
+    <Canvas shadows="soft" camera={{ position: [0, centerY, 2.6], fov: 40 }} dpr={[1, 2]}>
       <color attach="background" args={[BACKGROUND_HEX]} />
+      <StudioEnvironment />
       <StudioLights height={heightM} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[1.5, 64]} />
@@ -167,11 +195,6 @@ export default function FittingScene(props: FittingSceneProps) {
         {bodyData.map((data, index) => (
           <BodyMesh key={`body-${index}`} data={data} />
         ))}
-        {/* Голова — гладкий эллипсоид без черт лица: манекен не похож на конкретного человека. */}
-        <mesh position={[0, head.y, head.z]} scale={[0.82, 1, 0.95]} castShadow>
-          <sphereGeometry args={[head.radius, 48, 32]} />
-          <meshStandardMaterial color={MANNEQUIN_HEX} roughness={0.6} />
-        </mesh>
         {garmentData.map((data, index) => (
           <GarmentMesh key={`garment-${index}`} data={data} fabric={fabric} />
         ))}

@@ -3,7 +3,14 @@
 // обхваты груди, талии и бёдер из мерок, потому что именно по ним подбирается размер.
 import type { BodyZone } from '../../types/analysis'
 import type { Measurements } from '../../types/body'
-import { buildArm, buildLandmarks, buildLeg, buildTorso, shoulderHalfWidth } from './bodyParts'
+import {
+  buildArm,
+  buildHead,
+  buildLandmarks,
+  buildLeg,
+  buildTorso,
+  shoulderHalfWidth,
+} from './bodyParts'
 import { NO_FEATURES, type Features } from './profile'
 
 /** Горизонтальное сечение части тела. Все величины в сантиметрах, y — высота от пола. */
@@ -22,13 +29,16 @@ export interface Section {
   zone?: BodyZone
 }
 
-export type PartName = 'torso' | 'leftLeg' | 'rightLeg' | 'leftArm' | 'rightArm'
+export type PartName = 'head' | 'torso' | 'leftLeg' | 'rightLeg' | 'leftArm' | 'rightArm'
 
-/** Часть тела: сечения снизу вверх и признак, закрывать ли концы «крышкой». */
+/** Часть тела: сечения снизу вверх, закрывать ли концы и насколько скруглять крышки. */
 export interface BodyPart {
   sections: Section[]
   capBottom: boolean
   capTop: boolean
+  /** Высота купола на конце в долях радиуса (0 — плоская крышка), см. LoftOptions. */
+  domeBottom: number
+  domeTop: number
 }
 
 /** Высоты ключевых уровней тела в сантиметрах от пола. */
@@ -47,30 +57,39 @@ export interface Landmarks {
   wristY: number
 }
 
-/** Модель манекена: части тела, голова-сфера и уровни для построения одежды. */
+/** Модель манекена: части тела (включая голову без черт лица) и уровни для построения одежды. */
 export interface BodyModel {
   heightCm: number
   parts: Record<PartName, BodyPart>
-  /** Голова — эллипсоид без черт лица: центр и радиус. */
-  head: { y: number; z: number; radius: number }
   landmarks: Landmarks
+}
+
+/** Купол макушки в долях радиуса верхнего сечения головы: макушка оказывается на ~99,7 % роста. */
+export const HEAD_DOME = 0.7
+
+/** Закрытая с обоих концов часть тела с заданным скруглением крышек. */
+function closedPart(sections: Section[], domeBottom: number, domeTop: number): BodyPart {
+  return { sections, capBottom: true, capTop: true, domeBottom, domeTop }
 }
 
 /** Строит модель манекена по меркам пользователя. */
 export function buildBodyModel(m: Measurements): BodyModel {
   const landmarks = buildLandmarks(m)
   const shoulderHalf = shoulderHalfWidth(m)
-  const limb = (sections: Section[]): BodyPart => ({ sections, capBottom: true, capTop: true })
+  // Скругления: макушка, плечи и кончики пальцев круглые; стопа плоская, как подошва;
+  // верх ноги и низ головы спрятаны внутри туловища и шеи.
+  const arm = (side: number) => closedPart(buildArm(m, landmarks, side, shoulderHalf), 1, 0.8)
+  const leg = (side: number) => closedPart(buildLeg(m, landmarks, side), 0, 0)
   return {
     heightCm: m.heightCm,
     parts: {
-      torso: { sections: buildTorso(m, landmarks, shoulderHalf), capBottom: true, capTop: true },
-      leftLeg: limb(buildLeg(m, landmarks, -1)),
-      rightLeg: limb(buildLeg(m, landmarks, 1)),
-      leftArm: limb(buildArm(m, landmarks, -1, shoulderHalf)),
-      rightArm: limb(buildArm(m, landmarks, 1, shoulderHalf)),
+      head: closedPart(buildHead(m, landmarks), 0, HEAD_DOME),
+      torso: closedPart(buildTorso(m, landmarks, shoulderHalf), 0.5, 0),
+      leftLeg: leg(-1),
+      rightLeg: leg(1),
+      leftArm: arm(-1),
+      rightArm: arm(1),
     },
-    head: { y: 0.932 * m.heightCm, z: 1.5, radius: 0.06 * m.heightCm },
     landmarks,
   }
 }

@@ -25,6 +25,10 @@ export interface GarmentPart {
   foldCount: number
   /** Толщина подгиба на открытых краях, см (0 — без подгиба). */
   edgeThickness: number
+  /** Купол над верхом детали (у рукава — оката над плечом), в долях радиуса; 0 — нет. */
+  domeTop: number
+  /** Купол под низом детали (у брюк — шаговый шов между ног), в долях радиуса; 0 — нет. */
+  domeBottom: number
 }
 
 /** Запас в одной зоне сетки на высоте этой зоны на манекене. */
@@ -53,6 +57,9 @@ interface GarmentSpec {
 
 const LONG_SLEEVE = (l: Landmarks) => l.wristY + 1
 
+/** Низ туловищной детали брюк над шагом (доля роста): ниже ткань идёт штанинами. */
+const CROTCH_RISE = 0.015
+
 const GARMENT_SPECS: Record<Category, GarmentSpec> = {
   tshirt: {
     baseEaseCm: 6,
@@ -80,13 +87,13 @@ const GARMENT_SPECS: Record<Category, GarmentSpec> = {
   },
   trousers: {
     baseEaseCm: 6,
-    torso: (l, h) => [l.crotchY, l.waistY + 0.005 * h],
+    torso: (l, h) => [l.crotchY + CROTCH_RISE * h, l.waistY + 0.005 * h],
     sleeveBottom: null,
     legs: true,
   },
   jeans: {
     baseEaseCm: 3,
-    torso: (l, h) => [l.crotchY, l.waistY + 0.005 * h],
+    torso: (l, h) => [l.crotchY + CROTCH_RISE * h, l.waistY + 0.005 * h],
     sleeveBottom: null,
     legs: true,
   },
@@ -217,6 +224,12 @@ function hemRings(
   })
 }
 
+/** Купол шагового шва брюк в долях радиуса низа туловищной детали. */
+const CROTCH_DOME = 0.5
+
+/** Купол оката рукава: ткань закрывает круглое плечо так же, как купол руки манекена. */
+const SLEEVE_HEAD_DOME = 0.35
+
 /** Рукава или штанины: запас фасона плюс доля запаса соседней зоны туловища. */
 function limbParts(
   body: BodyModel,
@@ -227,18 +240,23 @@ function limbParts(
   const l = body.landmarks
   const h = body.heightCm
   const parts: GarmentPart[] = []
-  const make = (sections: Section[], easeFor: (y: number) => number): GarmentPart => ({
+  const make = (sections: Section[], easeFor: (y: number) => number, domeTop = 0): GarmentPart => ({
     rings: sections.map((section) => dressRing(section, easeFor(section.y), color)),
     capBottom: false,
-    capTop: false,
+    capTop: domeTop > 0,
     foldCount: FOLDS.limb,
     edgeThickness: FABRIC_EDGE_CM,
+    domeTop,
+    domeBottom: 0,
   })
   if (spec.sleeveBottom) {
     const bottom = spec.sleeveBottom(l, h)
     const sleeveEase = spec.baseEaseCm * 0.6 + Math.max(easeAt(eases, l.chestY, 0), 0) * 0.2
     for (const arm of [body.parts.leftArm, body.parts.rightArm]) {
-      parts.push(make(sliceSections(arm.sections, bottom, l.shoulderY), () => sleeveEase))
+      // Рукав доходит до верха руки и закрывается окатом поверх плеча.
+      const top = arm.sections[arm.sections.length - 1]?.y ?? l.shoulderY
+      const sections = sliceSections(arm.sections, bottom, top)
+      parts.push(make(sections, () => sleeveEase, SLEEVE_HEAD_DOME))
     }
   }
   if (spec.legs) {
@@ -246,10 +264,13 @@ function limbParts(
     // Свободные бёдра переходят в широкий верх штанины и плавно сходят к щиколотке.
     const legEase = (y: number) => {
       const t = Math.min(Math.max((y - l.ankleY) / (l.crotchY - l.ankleY), 0), 1)
-      return spec.baseEaseCm * 0.6 + hipsEase * 0.6 * t * t
+      return spec.baseEaseCm * 0.6 + hipsEase * 0.45 * t * t
     }
     for (const leg of [body.parts.leftLeg, body.parts.rightLeg]) {
-      parts.push(make(sliceSections(leg.sections, l.ankleY, l.crotchY + 0.01 * h), legEase))
+      // Штанина доходит до верха бедра и закрыта плоско: верх спрятан под туловищной деталью.
+      const legTop = leg.sections[leg.sections.length - 1]?.y ?? l.crotchY
+      const part = make(sliceSections(leg.sections, l.ankleY, legTop), legEase)
+      parts.push({ ...part, capTop: true })
     }
   }
   return parts
@@ -257,17 +278,18 @@ function limbParts(
 
 /**
  * Сечения тела под туловищной деталью. Ниже линии бёдер ткань висит прямо, а не повторяет
- * сужение тела между ног, поэтому сечения не уже бёдер. У брюк деталь заканчивается в шаге,
- * а ниже начинаются штанины.
+ * сужение тела между ног, поэтому сечения не уже бёдер. У брюк деталь заканчивается чуть
+ * выше шага куполом шагового шва и закрывает верх штанин.
  */
 function garmentTorsoSections(body: BodyModel, bottom: number, top: number): Section[] {
   const sections = sliceSections(body.parts.torso.sections, bottom, top)
   const hips = sectionAt(body.parts.torso.sections, body.landmarks.hipsY)
-  return sections.map((section) =>
-    section.y < hips.y && section.girth < hips.girth
+  return sections.map((section) => {
+    if (section.y >= hips.y) return section
+    return section.girth < hips.girth
       ? { ...section, girth: hips.girth, depthRatio: hips.depthRatio, features: hips.features }
-      : section,
-  )
+      : section
+  })
 }
 
 /** Строит вещь выбранного размера на манекене. */
@@ -298,11 +320,13 @@ export function buildGarment(
         ),
       ),
     ],
-    capBottom: false,
+    // У брюк низ туловищной детали закрыт куполом шагового шва: между ног нет просвета.
+    capBottom: spec.legs,
     capTop: false,
     foldCount: spec.hem ? FOLDS.skirt : FOLDS.torso,
-    // У брюк низ туловищной детали спрятан в шаге — подгиб там не нужен.
-    edgeThickness: spec.legs ? 0 : FABRIC_EDGE_CM,
+    edgeThickness: FABRIC_EDGE_CM,
+    domeTop: 0,
+    domeBottom: spec.legs ? CROTCH_DOME : 0,
   }
   // Рукава и штанины вне зон сетки, поэтому всегда в цвете товара.
   return [torsoPart, ...limbParts(body, spec, eases, product)]
