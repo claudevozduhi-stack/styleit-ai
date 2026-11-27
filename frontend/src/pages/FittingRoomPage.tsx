@@ -51,7 +51,14 @@ export function FittingRoomPage() {
   const garments = useMemo<SceneGarment[]>(
     () =>
       product && selected
-        ? [{ category: product.category, colorHex: product.color_hex, option: selected }]
+        ? [
+            {
+              category: product.category,
+              colorHex: product.color_hex,
+              option: selected,
+              title: product.title,
+            },
+          ]
         : [],
     [product, selected],
   )

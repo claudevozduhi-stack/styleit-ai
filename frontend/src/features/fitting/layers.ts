@@ -6,7 +6,7 @@ import type { LoftRing } from '../avatar/loft'
 import { outlineRadii } from '../avatar/profile'
 import { mixRadii } from '../avatar/sections'
 import type { BodyModel } from '../avatar/sections'
-import { ENCLOSE_SEGMENTS, encloseRing, withRadii } from './enclose'
+import { ENCLOSE_SEGMENTS, convexRing, encloseRing, withRadii } from './enclose'
 import { buildGarment, type ColorMode, type GarmentPart } from './garment'
 
 /** Вещь для сцены: категория, цвет и выбранный размер. */
@@ -14,10 +14,12 @@ export interface SceneGarment {
   category: Category
   colorHex: string
   option: SizeOption
+  /** Название товара: по нему уточняется ткань (например, «кожаная куртка»). */
+  title?: string
 }
 
 /** Зазор между слоями ткани, см: учитывает складки и подгибы краёв. */
-export const LAYER_GAP_CM = 1.5
+export const LAYER_GAP_CM = 1
 
 /** Полуоси кольца нижнего слоя на высоте y (линейно между кольцами); вне детали — null. */
 function innerRingAt(rings: LoftRing[], y: number): LoftRing | null {
@@ -83,22 +85,50 @@ function spreadAlongHeight(original: LoftRing[], enclosed: LoftRing[]): LoftRing
       )
       return radius + delta
     })
-    return withRadii(ring, spread)
+    return convexRing(withRadii(ring, spread))
   })
+}
+
+/** Сколько раз сглаживать контур верхнего слоя по высоте. */
+const VERTICAL_PASSES = 3
+
+/**
+ * Сглаживает контуры колец по высоте (фильтр [1, 2, 1], крайние кольца не трогаются):
+ * без этого на ткани видны поперечные полосы света на каждом сечении.
+ */
+function smoothVertically(rings: LoftRing[]): LoftRing[] {
+  let current = rings.map((ring) => outlineRadii(ring, ENCLOSE_SEGMENTS))
+  for (let pass = 0; pass < VERTICAL_PASSES; pass += 1) {
+    const previous = current
+    current = previous.map((radii, index) => {
+      const below = previous[index - 1]
+      const above = previous[index + 1]
+      if (!below || !above) return radii
+      return radii.map(
+        (radius, k) => 0.25 * (below[k] as number) + 0.5 * radius + 0.25 * (above[k] as number),
+      )
+    })
+  }
+  return rings.map((ring, index) => withRadii(ring, current[index] as number[]))
 }
 
 /** Надевает деталь поверх всех деталей нижнего слоя, которые она закрывает. */
 function layerPart(outer: GarmentPart, under: GarmentPart[], gapCm: number): GarmentPart {
   const covered = under.filter((inner) => covers(outer, inner))
   if (covered.length === 0) return outer
-  const rings = outer.rings.map((ring) => {
-    const inner = covered.flatMap((part) => {
-      const innerRing = innerRingAt(part.rings, ring.y)
+  const innerAt = (y: number) =>
+    covered.flatMap((part) => {
+      const innerRing = innerRingAt(part.rings, y)
       return innerRing ? [innerRing] : []
     })
-    return encloseRing(ring, inner, gapCm)
-  })
-  return { ...outer, rings: spreadAlongHeight(outer.rings, rings) }
+  const rings = outer.rings.map((ring) => encloseRing(ring, innerAt(ring.y), gapCm))
+  // Сглаженный по высоте контур снова охватывает нижний слой хотя бы с половиной зазора.
+  return {
+    ...outer,
+    rings: smoothVertically(spreadAlongHeight(outer.rings, rings)).map((ring) =>
+      encloseRing(ring, innerAt(ring.y), gapCm / 2),
+    ),
+  }
 }
 
 /** Надевает вещь поверх уже надетых деталей. */

@@ -12,7 +12,7 @@ import {
   type Section,
 } from '../avatar/sections'
 import { FIT_HEX, hexToRgb } from './colors'
-import { encloseRing } from './enclose'
+import { blendUnder, encloseRing, ringPoints } from './enclose'
 
 /** Режим раскраски: цвет товара или «тепловая карта» посадки. */
 export type ColorMode = 'product' | 'fit'
@@ -67,31 +67,31 @@ const CROTCH_RISE = 0.015
 
 const GARMENT_SPECS: Record<Category, GarmentSpec> = {
   tshirt: {
-    baseEaseCm: 6,
+    baseEaseCm: 4,
     torso: (l, h) => [l.hipsY - 0.01 * h, l.neckBaseY],
     sleeveBottom: (l, h) => l.armpitY - 0.06 * h,
     legs: false,
   },
   shirt: {
-    baseEaseCm: 8,
+    baseEaseCm: 6,
     torso: (l, h) => [l.crotchY + 0.01 * h, l.neckBaseY + 0.01 * h],
     sleeveBottom: LONG_SLEEVE,
     legs: false,
   },
   hoodie: {
-    baseEaseCm: 12,
+    baseEaseCm: 9,
     torso: (l, h) => [l.hipsY - 0.03 * h, l.neckTopY],
     sleeveBottom: LONG_SLEEVE,
     legs: false,
   },
   jacket: {
-    baseEaseCm: 12,
+    baseEaseCm: 9,
     torso: (l, h) => [l.crotchY - 0.02 * h, l.neckTopY],
     sleeveBottom: LONG_SLEEVE,
     legs: false,
   },
   trousers: {
-    baseEaseCm: 6,
+    baseEaseCm: 4,
     torso: (l, h) => [l.crotchY + CROTCH_RISE * h, l.waistY + 0.005 * h],
     sleeveBottom: null,
     legs: true,
@@ -308,7 +308,7 @@ function limbParts(
  * Насколько быстро ткань может прижиматься к телу ниже груди, см контура на см высоты:
  * ткань не облегает впадину под грудью, а свисает с неё и плавно подходит к талии.
  */
-const DRAPE_SLOPE = 0.4
+const DRAPE_SLOPE = 0.5
 
 /** Ниже груди контур сужается не круче DRAPE_SLOPE (только у сечений со скана). */
 function drapeBelowChest(sections: Section[], chestY: number): Section[] {
@@ -353,7 +353,7 @@ function garmentTorsoSections(body: BodyModel, bottom: number, top: number): Sec
 }
 
 /** Сколько раз сглаживать контур по высоте: ткань не повторяет мелкие перепады тела. */
-const SMOOTH_PASSES = 3
+const SMOOTH_PASSES = 6
 
 /** Сглаживает контуры сечений со скана по высоте (крайние сечения не трогаются). */
 function smoothRadii(sections: Section[]): Section[] {
@@ -373,6 +373,32 @@ function smoothRadii(sections: Section[]): Section[] {
     })
   }
   return current
+}
+
+/** На какой высоте (доля роста) верх штанины расширяется до края туловищной части брюк. */
+const LEG_JOIN_SHARE = 0.04
+
+/**
+ * Верх каждой штанины расширяется до своей половины нижнего края туловищной части брюк:
+ * край туловищной части не торчит над ногой ступенькой, а шаговый шов остаётся между ног.
+ */
+function joinLegsToTorso(
+  limbs: GarmentPart[],
+  torso: GarmentPart,
+  heightCm: number,
+): GarmentPart[] {
+  const bottom = torso.rings.reduce<LoftRing | undefined>(
+    (lowest, ring) => (!lowest || ring.y < lowest.y ? ring : lowest),
+    undefined,
+  )
+  if (!bottom) return limbs
+  const edge = ringPoints(bottom, bottom.foldDepth)
+  return limbs.map((part) => {
+    if (part.kind !== 'leg') return part
+    const side = Math.sign(part.rings[0]?.centerX ?? 0)
+    const cover = edge.filter((point) => point[0] * side >= 0)
+    return { ...part, rings: blendUnder(part.rings, cover, bottom.y, LEG_JOIN_SHARE * heightCm) }
+  })
 }
 
 /** Строит вещь выбранного размера на манекене. */
@@ -413,5 +439,6 @@ export function buildGarment(
     domeBottom: spec.legs ? CROTCH_DOME : 0,
   }
   // Рукава и штанины вне зон сетки, поэтому всегда в цвете товара.
-  return [torsoPart, ...limbParts(body, spec, eases, product)]
+  const limbs = limbParts(body, spec, eases, product)
+  return [torsoPart, ...(spec.legs ? joinLegsToTorso(limbs, torsoPart, body.heightCm) : limbs)]
 }

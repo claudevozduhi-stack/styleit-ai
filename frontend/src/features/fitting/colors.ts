@@ -26,3 +26,11 @@ export function hexToRgb(hex: string): Rgb {
   const value = Number.parseInt(match[1], 16)
   return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255]
 }
+
+/**
+ * Переводит долю канала из sRGB (как в HEX-цвете товара) в линейную яркость, в которой
+ * считает свет three.js. Без перевода тёмные цвета на экране выходят блёклыми.
+ */
+export function srgbToLinear(channel: number): number {
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+}

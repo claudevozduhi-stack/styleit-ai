@@ -71,8 +71,8 @@ describe('buildGarment', () => {
   const chestY = body.landmarks.chestY
 
   it('больший размер сидит свободнее меньшего', () => {
-    const small = buildGarment(body, 'tshirt', option('S', -4, 'tight'), '#ffffff', 'product')
-    const large = buildGarment(body, 'tshirt', option('L', 6, 'loose'), '#ffffff', 'product')
+    const small = buildGarment(body, 'tshirt', option('S', -2, 'tight'), '#ffffff', 'product')
+    const large = buildGarment(body, 'tshirt', option('L', 8, 'loose'), '#ffffff', 'product')
     const smallGirth = girthOf(ringNear(small[0]!.rings, chestY))
     const largeGirth = girthOf(ringNear(large[0]!.rings, chestY))
     expect(largeGirth - smallGirth).toBeCloseTo(10, 6)
@@ -108,11 +108,11 @@ describe('buildGarment', () => {
     expect(skirt[0]!.rings[0]!.y).toBeLessThan(body.landmarks.crotchY)
   })
 
-  it('кольца вещи совпадают с эллипсом своего обхвата', () => {
+  it('низ платья близок к эллипсу своего обхвата (контур сглажен, ноги внутри)', () => {
     const ring = buildGarment(body, 'dress', option('M', 0, 'good'), '#ffffff', 'product')[0]!
       .rings[0]!
     const expected = ellipseForGirth(girthOf(ring), 0.8)
-    expect(ring.a).toBeCloseTo(expected.a, 6)
+    expect(Math.abs(ring.a - expected.a)).toBeLessThan(0.2)
   })
 })
 

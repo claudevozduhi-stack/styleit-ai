@@ -9,6 +9,7 @@ import {
   convexHull,
   perimeter,
   radialProfile,
+  smoothAround,
   slicePoints,
   trianglesOf,
   type Point2,
@@ -29,9 +30,9 @@ export function sectionFromMesh(
   set: TriangleSet,
   y: number,
   zone?: BodyZone,
-  keep: (point: Point2) => boolean = () => true,
+  keep: (point: Point2, y: number) => boolean = () => true,
 ): Section | null {
-  const hull = convexHull(slicePoints(positions, set, y).filter(keep))
+  const hull = convexHull(slicePoints(positions, set, y).filter((point) => keep(point, y)))
   if (hull.length < MIN_HULL_POINTS) return null
   const center = boundsCenter(hull)
   const xs = hull.map((point) => point[0])
@@ -45,7 +46,7 @@ export function sectionFromMesh(
     centerX: center[0],
     centerZ: center[1],
     zone,
-    radii: radialProfile(hull, center, DEFAULT_LOFT.radialSegments),
+    radii: smoothAround(radialProfile(hull, center, DEFAULT_LOFT.radialSegments), 2),
   }
 }
 
@@ -57,7 +58,7 @@ function sectionsBetween(
   to: number,
   count: number,
   zones: Array<[BodyZone, number]> = [],
-  keep?: (point: Point2) => boolean,
+  keep?: (point: Point2, y: number) => boolean,
 ): Section[] {
   const levels: Array<[number, BodyZone | undefined]> = []
   // Равный уровень рядом с уровнем зоны пропускается: два почти совпадающих сечения
@@ -73,6 +74,26 @@ function sectionsBetween(
     const section = sectionFromMesh(positions, set, y, zone, keep)
     return section ? [section] : []
   })
+}
+
+/** Насколько срез выше подмышки может быть шире среза на уровне подмышки, см. */
+const SHOULDER_MARGIN_CM = 1.5
+
+/**
+ * Выше подмышки срез туловища захватывает дельтовидные мышцы, и одежда получала бы
+ * широкий «короб» с полкой на уровне груди. Там точки обрезаются по ширине туловища у
+ * подмышки: плечо закрывает окат рукава.
+ */
+function shoulderClip(
+  positions: Float32Array,
+  set: TriangleSet,
+  armpitY: number,
+): (point: Point2, y: number) => boolean {
+  const xs = slicePoints(positions, set, armpitY).map((point) => point[0])
+  if (xs.length === 0) return () => true
+  const low = Math.min(...xs) - SHOULDER_MARGIN_CM
+  const high = Math.max(...xs) + SHOULDER_MARGIN_CM
+  return (point, y) => y <= armpitY || (point[0] >= low && point[0] <= high)
 }
 
 /** Пределы вершин части тела по высоте. */
@@ -139,6 +160,7 @@ export function humanBodyModel(model: HumanModel, fitted: FittedHuman): BodyMode
       ['waist', landmarks.waistY],
       ['chest', landmarks.chestY],
     ],
+    shoulderClip(p, torsoSet, landmarks.armpitY),
   )
   // Верх ноги снимается вместе с туловищем, но только со своей стороны от середины тела:
   // так штанина у шага переходит в половину таза без ступеньки.

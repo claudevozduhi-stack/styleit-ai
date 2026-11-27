@@ -150,3 +150,51 @@ function armWeightOf(model: HumanModel, vertex: number): number {
   }
   return 0
 }
+
+/** Суставы ноги ниже бедра поворачиваются вместе с ногой целиком. */
+const LEG_JOINTS = new Set(['l-knee', 'r-knee', 'l-ankle', 'r-ankle'])
+/** Доля длины ноги под тазобедренным суставом, на которой поворот плавно нарастает. */
+const LEG_BLEND_SHARE = 0.2
+
+/**
+ * Сводит ноги из широкой стойки MakeHuman ближе, как у манекена: поворот вокруг
+ * тазобедренного сустава в плоскости XY. Весов скелета для ног в файле нет, поэтому вес
+ * вершины ноги плавно растёт от 0 у сустава до 1 на LEG_BLEND_SHARE длины ноги ниже —
+ * так область шага не рвётся. Туловище не двигается.
+ */
+export function closeLegs(model: HumanModel, positions: Float32Array, angleRad: number): void {
+  const hips = {
+    positive: jointPosition(model, positions, 'l-upper-leg'),
+    negative: jointPosition(model, positions, 'r-upper-leg'),
+  }
+  const ankleY = jointPosition(model, positions, 'l-ankle')[1]
+  const band = (hips.positive[1] - ankleY) * LEG_BLEND_SHARE
+  const total = positions.length / 3
+  for (let vertex = 0; vertex < total; vertex += 1) {
+    if (!isLegVertex(model, vertex)) continue
+    const x = positions[vertex * 3] as number
+    const y = positions[vertex * 3 + 1] as number
+    const pivot = x >= 0 ? hips.positive : hips.negative
+    const depth = Math.min(Math.max((pivot[1] - y) / band, 0), 1)
+    const weight = depth * depth * (3 - 2 * depth)
+    if (weight === 0) continue
+    // Нога при x > 0 поворачивается по часовой стрелке (стопа к середине), при x < 0 — против.
+    const angle = (x >= 0 ? -angleRad : angleRad) * weight
+    const dx = x - pivot[0]
+    const dy = y - pivot[1]
+    positions[vertex * 3] = pivot[0] + dx * Math.cos(angle) - dy * Math.sin(angle)
+    positions[vertex * 3 + 1] = pivot[1] + dx * Math.sin(angle) + dy * Math.cos(angle)
+  }
+}
+
+/** Вершина ноги или сустав колена и стопы. */
+function isLegVertex(model: HumanModel, vertex: number): boolean {
+  if (vertex < model.vertexCount) {
+    const part = model.parts[vertex]
+    return part === PART.legPositiveX || part === PART.legNegativeX
+  }
+  for (const name of LEG_JOINTS) {
+    if (model.joints.get(name) === vertex) return true
+  }
+  return false
+}

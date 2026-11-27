@@ -3,7 +3,7 @@
 import { ellipseForGirth } from './ellipse'
 import { addCap, buildGrid } from './loftGrid'
 import { NO_FEATURES, outlineRadii, type Features } from './profile'
-import { mixRadii, type Section } from './sections'
+import type { Section } from './sections'
 
 /** Цвет вершины в линейных долях 0..1. */
 export type Rgb = readonly [number, number, number]
@@ -92,16 +92,6 @@ export function toRing(section: Section, color: Rgb, foldDepth = 0): LoftRing {
   }
 }
 
-/** Контуры двух соседних колец в одном виде: если контур есть хотя бы у одного — у обоих. */
-function pairRadii(
-  first: LoftRing,
-  second: LoftRing,
-): [number[] | undefined, number[] | undefined] {
-  const segments = first.radii?.length ?? second.radii?.length
-  if (!segments) return [undefined, undefined]
-  return [outlineRadii(first, segments), outlineRadii(second, segments)]
-}
-
 /**
  * Сплайн Катмулла — Рома для одного числа, ограниченный значениями концов отрезка.
  * Ограничение убирает «выбросы» на резких переходах (например, от плеч к шее).
@@ -116,6 +106,27 @@ function smoothValue(p0: number, p1: number, p2: number, p3: number, t: number):
       (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
       (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
   return Math.min(Math.max(value, Math.min(p1, p2)), Math.max(p1, p2))
+}
+
+/**
+ * Контур между кольцами r1 и r2 сплайном по четырём кольцам: при линейном смешивании
+ * профиль ткани ломается на каждом сечении, и блик ложится полосами.
+ */
+function splineRadii(
+  rings: [LoftRing, LoftRing, LoftRing, LoftRing],
+  t: number,
+): number[] | undefined {
+  const segments = rings.find((ring) => ring.radii)?.radii?.length
+  if (!segments) return undefined
+  const [p0, p1, p2, p3] = rings.map((ring) => outlineRadii(ring, segments)) as [
+    number[],
+    number[],
+    number[],
+    number[],
+  ]
+  return p1.map((radius, k) =>
+    smoothValue(p0[k] as number, radius, p2[k] as number, p3[k] as number, t),
+  )
 }
 
 /** Линейно смешивает выпуклости двух колец. */
@@ -141,9 +152,8 @@ export function interpolateRings(rings: LoftRing[], stepsPerSpan: number): LoftR
     for (let step = 0; step < stepsPerSpan; step += 1) {
       const t = step / stepsPerSpan
       const pick = (key: SmoothKey) => smoothValue(r0[key], r1[key], r2[key], r3[key], t)
-      const [fromRadii, toRadii] = pairRadii(r1, r2)
       result.push({
-        radii: mixRadii(fromRadii, toRadii, t),
+        radii: splineRadii([r0, r1, r2, r3], t),
         y: pick('y'),
         a: pick('a'),
         b: pick('b'),
