@@ -167,13 +167,14 @@ describe('реалистичность ткани', () => {
 
 describe('стыки деталей одежды', () => {
   const halfWidth = (ring: LoftRing) => Math.abs(ring.centerX) + ring.a
+  const last = <T>(items: T[]): T | undefined => items[items.length - 1]
 
   it('рукав доходит до верха руки и закрыт окатом над плечом', () => {
     const [, sleeve] = buildGarment(body, 'tshirt', option('M', 0, 'good'), '#336699', 'product')
-    const armTop = body.parts.rightArm.sections.at(-1)?.y ?? 0
+    const armTop = last(body.parts.rightArm.sections)?.y ?? 0
     expect(sleeve?.capTop).toBe(true)
     expect(sleeve?.domeTop).toBeGreaterThan(0)
-    expect(sleeve?.rings.at(-1)?.y).toBeCloseTo(armTop)
+    expect(last(sleeve?.rings ?? [])?.y).toBeCloseTo(armTop)
   })
 
   it('у брюк шаг закрыт, а верх штанин спрятан внутри туловищной детали', () => {
@@ -181,7 +182,7 @@ describe('стыки деталей одежды', () => {
     expect(torso?.capBottom).toBe(true)
     expect(torso?.domeBottom).toBeGreaterThan(0)
     expect(leg?.capTop).toBe(true)
-    const legTop = leg?.rings.at(-1)
+    const legTop = last(leg?.rings ?? [])
     const torsoBottom = torso?.rings[0]
     expect(legTop && torsoBottom).toBeTruthy()
     expect(legTop!.y).toBeGreaterThan(torsoBottom!.y)
