@@ -9,7 +9,20 @@ import {
   type FormValues,
   type NumericKey,
 } from '../features/measurements/form'
+import { SizeQuickPick } from '../features/measurements/SizeQuickPick'
+import {
+  PRESET_KEYS,
+  presetFormValues,
+  presetHint,
+  type PresetKey,
+  type SizeLabel,
+} from '../features/measurements/sizePresets'
 import type { BodyGender } from '../types/body'
+
+/** Является ли поле формы одним из обхватов, которые заполняет быстрый выбор размера. */
+function isPresetKey(key: NumericKey): key is PresetKey {
+  return (PRESET_KEYS as readonly NumericKey[]).includes(key)
+}
 
 /** Страница ввода мерок. */
 export function MeasurementsPage() {
@@ -18,6 +31,28 @@ export function MeasurementsPage() {
   const [values, setValues] = useState<FormValues>(() => toFormValues(saved))
   const [errors, setErrors] = useState<Partial<Record<NumericKey, string>>>({})
   const [status, setStatus] = useState<string | null>(null)
+  const [selectedSize, setSelectedSize] = useState<SizeLabel | null>(null)
+
+  /** Заполняет обхваты типичными значениями размера; остальные поля не трогает. */
+  function applySize(nextGender: BodyGender, size: SizeLabel) {
+    setValues((current) => ({ ...current, ...presetFormValues(nextGender, size) }))
+    setErrors((current) => {
+      const rest = { ...current }
+      for (const key of PRESET_KEYS) delete rest[key]
+      return rest
+    })
+  }
+
+  function handleSizeSelect(size: SizeLabel) {
+    setSelectedSize(size)
+    applySize(gender, size)
+  }
+
+  // При смене фигуры уже выбранный размер пересчитывается по таблице другого пола.
+  function handleGenderChange(nextGender: BodyGender) {
+    setGender(nextGender)
+    if (selectedSize !== null) applySize(nextGender, selectedSize)
+  }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -40,21 +75,12 @@ export function MeasurementsPage() {
       <h1 className="text-2xl font-bold">Ваши мерки</h1>
       <p className="text-sm text-neutral-600">Мерки хранятся только в этом браузере.</p>
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
-        <fieldset className="flex gap-4">
-          <legend className="mb-1 text-sm font-medium">Фигура</legend>
-          {(['female', 'male'] as const).map((option) => (
-            <label key={option} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="gender"
-                value={option}
-                checked={gender === option}
-                onChange={() => setGender(option)}
-              />
-              {option === 'female' ? 'Женская' : 'Мужская'}
-            </label>
-          ))}
-        </fieldset>
+        <SizeQuickPick
+          gender={gender}
+          selectedSize={selectedSize}
+          onGenderChange={handleGenderChange}
+          onSizeSelect={handleSizeSelect}
+        />
         {FIELDS.map((field) => (
           <label key={field.key} className="block">
             <span className="text-sm font-medium">{field.label}</span>
@@ -67,6 +93,11 @@ export function MeasurementsPage() {
               className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2"
             />
             {field.hint && <span className="text-xs text-neutral-500">{field.hint}</span>}
+            {selectedSize !== null && isPresetKey(field.key) && (
+              <span className="block text-xs text-brand">
+                {presetHint(gender, selectedSize, field.key)}
+              </span>
+            )}
             {errors[field.key] && (
               <span className="block text-sm text-red-600">{errors[field.key]}</span>
             )}
