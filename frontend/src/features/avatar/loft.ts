@@ -21,6 +21,8 @@ export interface LoftRing {
   foldDepth: number
   /** Готовый контур (радиусы по равным углам), если кольцо снято со сканированного тела. */
   radii?: number[]
+  /** Натяжение ткани 0..1 (тесный размер): ткань светлее и с поперечными складками натяжения. */
+  strain?: number
 }
 
 /** Данные сетки для BufferGeometry. Координаты в сантиметрах. */
@@ -162,6 +164,7 @@ export function interpolateRings(rings: LoftRing[], stepsPerSpan: number): LoftR
         color: mixRgb(r1.color, r2.color, t),
         features: mixFeatures(r1.features, r2.features, t),
         foldDepth: r1.foldDepth + (r2.foldDepth - r1.foldDepth) * t,
+        strain: (r1.strain ?? 0) + ((r2.strain ?? 0) - (r1.strain ?? 0)) * t,
       })
     }
   }

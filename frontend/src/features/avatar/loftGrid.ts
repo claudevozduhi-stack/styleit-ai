@@ -14,6 +14,23 @@ export interface Grid {
 /** Сколько сантиметров по высоте приходится на один повтор фактуры ткани. */
 const TEXTURE_HEIGHT_CM = 10
 
+/** Насколько светлеет натянутая ткань при натяжении 1 (нить растянута, просвечивает основа). */
+const STRAIN_LIGHTEN = 0.18
+/** Яркость поперечных складок натяжения и их шаг по высоте, см. */
+const STRAIN_LINES = 0.07
+const STRAIN_LINE_STEP_CM = 2.2
+
+/**
+ * Цвет натянутой ткани на высоте y: светлее и с поперечными полосами — так видны
+ * складки натяжения, которые расходятся от тесной зоны.
+ */
+export function strainedColor(color: LoftRing['color'], strain: number, y: number): number[] {
+  if (strain <= 0) return [...color]
+  const lines = 0.5 + 0.5 * Math.sin((2 * Math.PI * y) / STRAIN_LINE_STEP_CM)
+  const lift = strain * (STRAIN_LIGHTEN + STRAIN_LINES * (lines - 0.5))
+  return color.map((channel) => Math.min(channel + (1 - channel) * lift, 1))
+}
+
 /** Фаза складок плавно меняется по высоте: складки «гуляют», а не идут ровными рёбрами. */
 function foldPhase(y: number): number {
   return 0.9 * Math.sin(y * 0.11)
@@ -73,7 +90,7 @@ export function buildGrid(rings: LoftRing[], segments: number, foldCount: number
     for (let k = 0; k <= segments; k += 1) {
       const [x, z] = outline[k % segments] as [number, number]
       grid.positions.push(x, ring.y, z)
-      grid.colors.push(...ring.color)
+      grid.colors.push(...strainedColor(ring.color, ring.strain ?? 0, ring.y))
       grid.uvs.push(k / segments, ring.y / TEXTURE_HEIGHT_CM)
     }
   }
