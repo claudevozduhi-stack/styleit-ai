@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Measurements } from '../../types/body'
 import { ellipseForGirth, ramanujanPerimeter } from './ellipse'
-import { DEFAULT_LOFT, loftMesh, toRing } from './loft'
+import { DEFAULT_LOFT, domeRings, loftMesh, toRing } from './loft'
 import { buildBodyModel, sectionAt, sliceSections } from './sections'
 
 const measurements: Measurements = {
@@ -60,7 +60,17 @@ describe('buildBodyModel', () => {
       expect(heights).toEqual([...heights].sort((x, y) => x - y))
       expect(Math.max(...heights)).toBeLessThan(measurements.heightCm)
     }
-    expect(body.head.y + body.head.radius).toBeLessThanOrEqual(measurements.heightCm)
+  })
+
+  it('голова с куполом макушки заканчивается у отметки роста, но не выше', () => {
+    const head = body.parts.head
+    const mesh = loftMesh(
+      head.sections.map((s) => toRing(s, [1, 1, 1])),
+      { ...DEFAULT_LOFT, capTop: true, domeTop: head.domeTop },
+    )
+    const top = Math.max(...Array.from(mesh.positions).filter((_, index) => index % 3 === 1))
+    expect(top).toBeLessThanOrEqual(measurements.heightCm)
+    expect(top).toBeGreaterThan(0.98 * measurements.heightCm)
   })
 
   it('учитывает длину ноги по шву, но в разумных пределах', () => {
@@ -139,5 +149,26 @@ describe('loftMesh', () => {
     const plain = loftMesh(rings)
     const hemmed = loftMesh(rings, { ...DEFAULT_LOFT, edgeThickness: 0.6 })
     expect(hemmed.positions.length - plain.positions.length).toBe(2 * columns * 3)
+  })
+})
+
+describe('купола на концах деталей', () => {
+  const edge = toRing({ y: 100, girth: 30, depthRatio: 0.9, centerX: 5 }, [1, 1, 1])
+
+  it('кольца купола сужаются и поднимаются над краем', () => {
+    const rings = domeRings(edge, 1, 1)
+    const heights = rings.map((ring) => ring.y)
+    expect(heights).toEqual([...heights].sort((x, y) => x - y))
+    expect(rings.every((ring) => ring.y > edge.y && ring.a < edge.a)).toBe(true)
+    const last = rings[rings.length - 1]
+    expect(last?.a).toBeLessThan(edge.a * 0.15)
+    expect(last?.centerX).toBe(5)
+  })
+
+  it('купол вниз идёт под краем снизу вверх, нулевой купол пуст', () => {
+    const rings = domeRings(edge, 0.5, -1)
+    expect(rings.every((ring) => ring.y < edge.y)).toBe(true)
+    expect(rings[rings.length - 1]?.a).toBeGreaterThan(rings[0]?.a ?? 0)
+    expect(domeRings(edge, 0, 1)).toEqual([])
   })
 })

@@ -124,8 +124,8 @@ describe('hexToRgb', () => {
 })
 
 describe('scene meshes', () => {
-  it('строит пять частей манекена и столько же сеток, сколько деталей у вещи', () => {
-    expect(bodyMeshes(body)).toHaveLength(5)
+  it('строит шесть частей манекена (с головой) и столько же сеток, сколько деталей у вещи', () => {
+    expect(bodyMeshes(body)).toHaveLength(6)
     const parts = buildGarment(body, 'jeans', option('M', 0, 'good'), '#223344', 'fit')
     expect(garmentMeshes(parts)).toHaveLength(parts.length)
   })
@@ -162,5 +162,30 @@ describe('реалистичность ткани', () => {
         expect(girthOf(ring)).toBeGreaterThanOrEqual(bodyGirth)
       }
     }
+  })
+})
+
+describe('стыки деталей одежды', () => {
+  const halfWidth = (ring: LoftRing) => Math.abs(ring.centerX) + ring.a
+  const last = <T>(items: T[]): T | undefined => items[items.length - 1]
+
+  it('рукав доходит до верха руки и закрыт окатом над плечом', () => {
+    const [, sleeve] = buildGarment(body, 'tshirt', option('M', 0, 'good'), '#336699', 'product')
+    const armTop = last(body.parts.rightArm.sections)?.y ?? 0
+    expect(sleeve?.capTop).toBe(true)
+    expect(sleeve?.domeTop).toBeGreaterThan(0)
+    expect(last(sleeve?.rings ?? [])?.y).toBeCloseTo(armTop)
+  })
+
+  it('у брюк шаг закрыт, а верх штанин спрятан внутри туловищной детали', () => {
+    const [torso, leg] = buildGarment(body, 'jeans', option('M', 0, 'good'), '#336699', 'product')
+    expect(torso?.capBottom).toBe(true)
+    expect(torso?.domeBottom).toBeGreaterThan(0)
+    expect(leg?.capTop).toBe(true)
+    const legTop = last(leg?.rings ?? [])
+    const torsoBottom = torso?.rings[0]
+    expect(legTop && torsoBottom).toBeTruthy()
+    expect(legTop!.y).toBeGreaterThan(torsoBottom!.y)
+    expect(halfWidth(legTop!)).toBeLessThan(halfWidth(torsoBottom!))
   })
 })

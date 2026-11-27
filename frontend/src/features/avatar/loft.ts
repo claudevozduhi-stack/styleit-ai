@@ -42,6 +42,12 @@ export interface LoftOptions {
   foldCount: number
   /** Толщина ткани у открытых краёв: подол, манжеты, горловина (0 — без подгиба). */
   edgeThickness: number
+  /**
+   * Скругление закрытых концов: высота «купола» в долях радиуса кольца (0 — плоская крышка).
+   * Купол делает плечо, кончики пальцев и макушку круглыми, а не срезанными.
+   */
+  domeBottom: number
+  domeTop: number
 }
 
 export const DEFAULT_LOFT: LoftOptions = {
@@ -51,7 +57,13 @@ export const DEFAULT_LOFT: LoftOptions = {
   capTop: false,
   foldCount: 0,
   edgeThickness: 0,
+  domeBottom: 0,
+  domeTop: 0,
 }
+
+/** Сколько колец в куполе закрытого конца и до какой доли четверти окружности он доходит. */
+const DOME_RINGS = 5
+const DOME_SWEEP = 0.94
 
 /** Смешивает два цвета: t = 0 — первый, t = 1 — второй. */
 export function mixRgb(from: Rgb, to: Rgb, t: number): Rgb {
@@ -132,10 +144,14 @@ export function interpolateRings(rings: LoftRing[], stepsPerSpan: number): LoftR
   return result
 }
 
+/** Подгиб изнутри чуть темнее лицевой стороны: край читается как обработанный шов. */
+const HEM_SHADE = 0.8
+
 /** Подгиб ткани на открытом краю: кольцо чуть внутри и выше (или ниже) края. */
 function hemRing(edge: LoftRing, thickness: number, direction: 1 | -1): LoftRing {
   return {
     ...edge,
+    color: [edge.color[0] * HEM_SHADE, edge.color[1] * HEM_SHADE, edge.color[2] * HEM_SHADE],
     y: edge.y + direction * thickness,
     a: Math.max(edge.a - thickness, 0.1),
     b: Math.max(edge.b - thickness, 0.1),
@@ -143,12 +159,40 @@ function hemRing(edge: LoftRing, thickness: number, direction: 1 | -1): LoftRing
   }
 }
 
-/** Кольца для построения: сглаженные, с подгибами на открытых краях. */
+/**
+ * Купол над концом детали: кольца сжимаются по четверти окружности, как у полусферы.
+ * direction: +1 — купол вверх (над последним кольцом), −1 — вниз (под первым).
+ * Кольца возвращаются по порядку снизу вверх.
+ */
+export function domeRings(edge: LoftRing, dome: number, direction: 1 | -1): LoftRing[] {
+  if (dome <= 0) return []
+  const height = dome * ((edge.a + edge.b) / 2)
+  const rings = Array.from({ length: DOME_RINGS }, (_, index) => {
+    const angle = ((index + 1) / DOME_RINGS) * (Math.PI / 2) * DOME_SWEEP
+    const scale = Math.cos(angle)
+    return {
+      ...edge,
+      y: edge.y + direction * height * Math.sin(angle),
+      a: edge.a * scale,
+      b: edge.b * scale,
+      foldDepth: edge.foldDepth * scale,
+    }
+  })
+  return direction === 1 ? rings : rings.reverse()
+}
+
+/** Кольца для построения: сглаженные, с куполами на закрытых и подгибами на открытых краях. */
 function prepareRings(source: LoftRing[], options: LoftOptions): LoftRing[] {
-  const rings = interpolateRings(source, options.stepsPerSpan)
-  const first = rings[0]
-  const last = rings[rings.length - 1]
-  if (options.edgeThickness <= 0 || !first || !last) return rings
+  const smooth = interpolateRings(source, options.stepsPerSpan)
+  const first = smooth[0]
+  const last = smooth[smooth.length - 1]
+  if (!first || !last) return smooth
+  const rings = [
+    ...(options.capBottom ? domeRings(first, options.domeBottom, -1) : []),
+    ...smooth,
+    ...(options.capTop ? domeRings(last, options.domeTop, 1) : []),
+  ]
+  if (options.edgeThickness <= 0) return rings
   const thickness = options.edgeThickness
   return [
     ...(options.capBottom ? [] : [hemRing(first, thickness, 1)]),

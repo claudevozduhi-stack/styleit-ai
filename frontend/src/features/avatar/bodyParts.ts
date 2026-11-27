@@ -76,6 +76,7 @@ function torsoFeatures(m: Measurements): Features[] {
     features({ shoulderBlades: 0.03 }),
     NO_FEATURES,
     NO_FEATURES,
+    NO_FEATURES,
   ]
 }
 
@@ -98,6 +99,13 @@ export function buildTorso(m: Measurements, l: Landmarks, shoulderHalf: number):
     [l.chestY, m.chestCm, r.chest, 0, 'chest'],
     [l.armpitY, m.chestCm * 0.97, r.chest * 0.95, 0],
     [l.shoulderY, ramanujanPerimeter(shoulderA, shoulderB), shoulderB / shoulderA, -0.5],
+    // Трапеция: плечи плавно скатываются к шее, а не обрываются ступенькой.
+    [
+      (l.shoulderY + l.neckBaseY) / 2,
+      ramanujanPerimeter(shoulderA * 0.6, shoulderB * 0.85),
+      (shoulderB * 0.85) / (shoulderA * 0.6),
+      -0.8,
+    ],
     // Шея слегка наклонена вперёд, как у человека в естественной позе.
     [l.neckBaseY, neckGirth, 0.9, 0.5],
     [l.neckTopY, neckGirth * 0.95, 0.92, 1.5],
@@ -117,7 +125,8 @@ export function buildTorso(m: Measurements, l: Landmarks, shoulderHalf: number):
 /** Сечения одной ноги от стопы до верха бедра; side = −1 для левой, +1 для правой. */
 export function buildLeg(m: Measurements, l: Landmarks, side: number): Section[] {
   const hipsHalf = halfWidth(m.hipsCm, DEPTH_RATIOS[m.gender].hips)
-  const top = hipsHalf * 0.48
+  // Верх бедра целиком внутри силуэта бёдер, иначе бедро «выпирает» сбоку у шага.
+  const top = hipsHalf * 0.44
   const bottom = hipsHalf * 0.42
   const c = l.crotchY
   // Стопа — вытянутый вперёд эллипс: длина ~15 % роста, пятка чуть позади щиколотки.
@@ -135,7 +144,7 @@ export function buildLeg(m: Measurements, l: Landmarks, side: number): Section[]
     [c * 0.72, m.hipsCm * 0.46, 0.95, top, 0.5],
     [c * 0.87, m.hipsCm * 0.53, 0.95, top, 0],
     [c, m.hipsCm * 0.58, 0.95, top, 0],
-    [c + 0.03 * m.heightCm, m.hipsCm * 0.6, 0.95, top, 0],
+    [c + 0.03 * m.heightCm, m.hipsCm * 0.56, 0.95, top, 0],
   ]
   return rows.map(([y, girth, depthRatio, x, z]) => ({
     y,
@@ -144,6 +153,41 @@ export function buildLeg(m: Measurements, l: Landmarks, side: number): Section[]
     centerX: side * x,
     centerZ: z,
   }))
+}
+
+/**
+ * Голова без черт лица: подбородок и челюсть, скулы и затылок; макушку закрывает купол
+ * (см. HEAD_DOME в sections.ts).
+ * Размеры — доли роста (ширина головы ~9 %, длина ~11 % роста), центр чуть впереди шеи.
+ */
+export function buildHead(m: Measurements, l: Landmarks): Section[] {
+  const h = m.heightCm
+  const neckGirth = m.chestCm * 0.37 * 0.95
+  // [высота, полуширина, полуглубина, смещение вперёд] — всё в долях роста, кроме шеи.
+  const rows: Array<[number, number, number, number]> = [
+    [0.884, 0.03, 0.038, 0.012],
+    [0.9, 0.038, 0.05, 0.01],
+    [0.918, 0.044, 0.056, 0.007],
+    [0.94, 0.046, 0.058, 0.004],
+    [0.962, 0.044, 0.056, 0.002],
+  ]
+  const neck: Section = {
+    y: l.neckTopY - 0.005 * h,
+    girth: neckGirth,
+    depthRatio: 0.92,
+    centerX: 0,
+    centerZ: 1.5,
+  }
+  return [
+    neck,
+    ...rows.map(([y, a, b, z]) => ({
+      y: y * h,
+      girth: ramanujanPerimeter(a * h, b * h),
+      depthRatio: b / a,
+      centerX: 0,
+      centerZ: z * h,
+    })),
+  ]
 }
 
 /** Сечения одной руки от кончиков пальцев до плеча; кисть плоская, руки в лёгкой A-позе. */
@@ -160,10 +204,13 @@ export function buildArm(
     [0.4 * m.heightCm, m.chestCm * 0.13, 1.8, x - 1, 2.5],
     [0.44 * m.heightCm, m.chestCm * 0.2, 2.3, x, 2],
     [l.wristY, m.chestCm * 0.16, 1.4, x, 1.5],
-    [l.elbowY, m.chestCm * 0.25, 0.95, x, 0],
+    // Предплечье у локтя шире, к запястью сужается.
+    [(l.wristY + l.elbowY) / 2 + 0.03 * m.heightCm, m.chestCm * 0.24, 1.05, x, 0.8],
+    [l.elbowY, m.chestCm * 0.23, 0.95, x, 0],
+    // Бицепс и дельтовидная мышца: плечо круглое, купол сверху закрывает стык с туловищем.
+    [(l.elbowY + l.armpitY) / 2, m.chestCm * 0.27, 0.95, x, 0],
     [l.armpitY, upperArm, 0.9, x, 0],
-    [l.shoulderY, upperArm * 0.95, 0.9, x - 1, 0],
-    [l.shoulderY + 0.012 * m.heightCm, upperArm * 0.55, 0.9, x - 2, 0],
+    [l.shoulderY - 0.008 * m.heightCm, upperArm * 0.97, 0.95, x - 0.6, 0],
   ]
   return rows.map(([y, girth, depthRatio, cx, z]) => ({
     y,
