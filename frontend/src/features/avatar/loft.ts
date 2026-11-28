@@ -33,6 +33,22 @@ export interface MeshData {
   /** Развёртка для фактуры ткани: u — по окружности, v — по высоте (1 = 10 см). */
   uvs: Float32Array
   indices: Uint32Array
+  /** Устройство решётки лофта: нужно, чтобы проложить по поверхности швы и строчку. */
+  layout?: GridLayout
+}
+
+/**
+ * Решётка лофта: вершины идут кольцами снизу вверх, в кольце columns вершин (последняя —
+ * копия первой, шов развёртки). Кольца firstRow..lastRow — сама деталь, без подгибов и куполов.
+ */
+export interface GridLayout {
+  rows: number
+  columns: number
+  firstRow: number
+  lastRow: number
+  /** Открыт ли край детали снизу и сверху (подол, манжета, горловина, пояс). */
+  openBottom: boolean
+  openTop: boolean
 }
 
 export interface LoftOptions {
@@ -231,6 +247,21 @@ function prepareRings(source: LoftRing[], options: LoftOptions): LoftRing[] {
   ]
 }
 
+/** Где в подготовленных кольцах начинается и кончается сама деталь (без подгибов и куполов). */
+function gridLayout(rows: number, options: LoftOptions): GridLayout {
+  const hem = options.edgeThickness > 0 ? 1 : 0
+  const below = options.capBottom ? (options.domeBottom > 0 ? DOME_RINGS : 0) : hem
+  const above = options.capTop ? (options.domeTop > 0 ? DOME_RINGS : 0) : hem
+  return {
+    rows,
+    columns: options.radialSegments + 1,
+    firstRow: below,
+    lastRow: rows - 1 - above,
+    openBottom: !options.capBottom,
+    openTop: !options.capTop,
+  }
+}
+
 /** Строит сетку через кольца: вершины, нормали, развёртку и по два треугольника на «квадрат». */
 export function loftMesh(sourceRings: LoftRing[], options: LoftOptions = DEFAULT_LOFT): MeshData {
   const rings = prepareRings(sourceRings, options)
@@ -245,5 +276,6 @@ export function loftMesh(sourceRings: LoftRing[], options: LoftOptions = DEFAULT
     colors: new Float32Array(grid.colors),
     uvs: new Float32Array(grid.uvs),
     indices: new Uint32Array(grid.indices),
+    layout: gridLayout(rings.length, options),
   }
 }
