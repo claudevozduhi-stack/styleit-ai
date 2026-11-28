@@ -43,7 +43,7 @@ export const DENIM_THREAD: Rgb = [0.79, 0.55, 0.24]
 /** Шов — тень в стыке двух деталей ткани: тот же цвет, заметно темнее. */
 const SEAM_SHADE = 0.72
 
-const SEAM_LINE: LineStyle = {
+export const SEAM_LINE: LineStyle = {
   widthCm: 0.12,
   dashCm: Infinity,
   gapCm: 0,
@@ -52,7 +52,7 @@ const SEAM_LINE: LineStyle = {
 }
 
 /** Строчка: стежки 3,5 мм через 1,5 мм. */
-function stitchLine(denim: boolean): LineStyle {
+export function stitchLine(denim: boolean): LineStyle {
   return {
     widthCm: denim ? 0.12 : 0.09,
     dashCm: 0.35,
@@ -84,10 +84,10 @@ export const TRIM_SPECS: Record<FabricKind, TrimSpec> = {
 
 /** Пояс брюк и юбок: строчки по краю и шов, отделяющий пояс от вещи, см от верха. */
 const WAISTBAND_ROWS = [0.6, 3.4]
-const WAISTBAND_SEAM_CM = 4
+export const WAISTBAND_SEAM_CM = 4
 
 /** Изменяемые массивы полосок одной вещи. */
-interface TrimBuffer {
+export interface TrimBuffer {
   positions: number[]
   normals: number[]
   colors: number[]
@@ -232,17 +232,21 @@ function addPartTrims(
 /**
  * Швы и строчка одной вещи одной сеткой: parts и meshes — детали вещи и их сетки
  * в одном порядке. isBottomWear — брюки, джинсы и юбки (у них сверху пояс, а не горловина).
+ * extras — дополнительные детали конкретной вещи (например, карманы джинсов).
  */
 export function garmentTrims(
   parts: GarmentPart[],
   meshes: MeshData[],
   fabric: FabricKind,
   isBottomWear: boolean,
+  extras?: (buffer: TrimBuffer, part: GarmentPart, mesh: MeshData) => void,
 ): MeshData {
   const buffer: TrimBuffer = { positions: [], normals: [], colors: [], indices: [] }
   parts.forEach((part, index) => {
     const mesh = meshes[index]
-    if (mesh) addPartTrims(buffer, part, mesh, fabric, isBottomWear)
+    if (!mesh) return
+    addPartTrims(buffer, part, mesh, fabric, isBottomWear)
+    extras?.(buffer, part, mesh)
   })
   return {
     positions: new Float32Array(buffer.positions),
