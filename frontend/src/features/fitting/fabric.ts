@@ -1,5 +1,6 @@
-// Процедурные ткани: карта рельефа (bump map) и свойства материала генерируются кодом,
-// без чужих текстур и фото.
+// Ткани: свойства материала, карты рельефа и шероховатости.
+// Основные карты — фотосканы тканей Poly Haven (CC0), собранные tools/build_fabric_textures.py.
+// Пока они грузятся (или если недоступны), рельеф рисуется процедурно, кодом.
 import type { Category } from '../../types/catalog'
 
 /** Ткань: трикотаж, гладкая ткань, деним (диагональная саржа), шерсть или кожа. */
@@ -43,10 +44,16 @@ export interface FabricLook {
   /** Лаковый слой: лёгкий блеск выделанной кожи. */
   clearcoat: number
   clearcoatRoughness: number
-  /** Глубина рельефа переплетения. */
+  /** Глубина процедурного рельефа (запасной вариант, пока карты грузятся). */
   bumpScale: number
-  /** Сколько раз рисунок повторяется по окружности детали. */
-  repeatAround: number
+  /** Сила карты нормалей: насколько выпукло видны нити, петли и зерно. */
+  normalStrength: number
+  /**
+   * Сколько сантиметров на вещи занимает один повтор карты: настоящий размер куска ткани,
+   * снятого для скана (27–30 см). При меньшем повторе нити мельче пикселя экрана и
+   * фактура пропадает в мипмапах; поэтому видимость задаётся силой normalStrength.
+   */
+  tileCm: number
 }
 
 export const FABRIC_LOOK: Record<FabricKind, FabricLook> = {
@@ -57,7 +64,8 @@ export const FABRIC_LOOK: Record<FabricKind, FabricLook> = {
     clearcoat: 0,
     clearcoatRoughness: 1,
     bumpScale: 0.1,
-    repeatAround: 12,
+    normalStrength: 5,
+    tileCm: 26,
   },
   woven: {
     roughness: 0.8,
@@ -66,7 +74,8 @@ export const FABRIC_LOOK: Record<FabricKind, FabricLook> = {
     clearcoat: 0,
     clearcoatRoughness: 1,
     bumpScale: 0.06,
-    repeatAround: 14,
+    normalStrength: 4,
+    tileCm: 28,
   },
   denim: {
     roughness: 0.95,
@@ -75,16 +84,18 @@ export const FABRIC_LOOK: Record<FabricKind, FabricLook> = {
     clearcoat: 0,
     clearcoatRoughness: 1,
     bumpScale: 0.14,
-    repeatAround: 10,
+    normalStrength: 3,
+    tileCm: 27,
   },
   wool: {
     roughness: 1,
-    sheen: 1,
-    sheenRoughness: 0.35,
+    sheen: 0.6,
+    sheenRoughness: 0.75,
     clearcoat: 0,
     clearcoatRoughness: 1,
     bumpScale: 0.12,
-    repeatAround: 8,
+    normalStrength: 4,
+    tileCm: 27,
   },
   leather: {
     roughness: 0.65,
@@ -93,8 +104,31 @@ export const FABRIC_LOOK: Record<FabricKind, FabricLook> = {
     clearcoat: 0.1,
     clearcoatRoughness: 0.6,
     bumpScale: 0.04,
-    repeatAround: 6,
+    normalStrength: 3.5,
+    tileCm: 30,
   },
+}
+
+/**
+ * Средняя шероховатость карт после сборки (ROUGHNESS_MEAN в tools/build_fabric_textures.py).
+ * Материал умножает карту на свой множитель, поэтому множитель = нужная матовость / среднее.
+ */
+export const ROUGHNESS_MAP_MEAN = 0.8
+
+/** Множитель шероховатости материала для карты, чтобы в среднем ткань имела look.roughness. */
+export function roughnessFactor(look: FabricLook): number {
+  return look.roughness / ROUGHNESS_MAP_MEAN
+}
+
+/** Повтор текстуры по развёртке: в одной единице UV TEXTURE_UNIT_CM сантиметров ткани. */
+export function textureRepeat(look: FabricLook, unitCm: number): number {
+  return unitCm / look.tileCm
+}
+
+/** Адреса карт нормалей и шероховатости ткани (файлы из public/textures). */
+export function fabricMapUrls(kind: FabricKind, base = '/'): { normal: string; rough: string } {
+  const folder = `${base.endsWith('/') ? base : `${base}/`}textures/fabric-${kind}`
+  return { normal: `${folder}-normal.jpg`, rough: `${folder}-rough.jpg` }
 }
 
 /** Сторона квадратной карты рельефа в пикселях. */

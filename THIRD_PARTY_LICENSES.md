@@ -4,6 +4,7 @@
 Фото и текстов магазинов в проекте нет: каталог содержит только факты (название, цена, цвет,
 размерная сетка, ссылка). Одежда генерируется нашим кодом. Единственная внешняя 3D-модель —
 базовое тело MakeHuman (CC0, раздел «3D-данные» ниже); код MakeHuman (AGPL) не используется.
+Фактура тканей — сканы Poly Haven (CC0, раздел «Текстуры тканей» ниже).
 
 ## 3D-данные
 
@@ -14,6 +15,24 @@
 Из этих данных скрипт `tools/build_body_model.py` собирает `frontend/public/models/body-v1.*`:
 только тело (без глаз, зубов и волос), части тела, морфы пола, веса и обхватов, а также наш
 морф «манекен», который сглаживает лицо и соски.
+
+## Текстуры тканей
+
+Все материалы Poly Haven распространяются под CC0 1.0 Universal (public domain): https://polyhaven.com/license.
+Берутся только карты нормалей и шероховатости (без цвета), JPG 1K, MD5 закреплены в скрипте.
+
+| Ткань | Материал Poly Haven | Авторы | Лицензия | Ссылка |
+|---|---|---|---|---|
+| Трикотаж | Cotton Jersey | colormass (фото), Rico Cilliers (обработка) | CC0 1.0 | https://polyhaven.com/a/cotton_jersey |
+| Гладкая ткань | Stretch Poplin | colormass (фото), Rico Cilliers (обработка) | CC0 1.0 | https://polyhaven.com/a/stretch_poplin |
+| Деним | Denim Fabric 03 | colormass (фото), Rico Cilliers (обработка) | CC0 1.0 | https://polyhaven.com/a/denim_fabric_03 |
+| Шерсть | Poly Wool Herringbone | colormass (фото), Rico Cilliers (обработка) | CC0 1.0 | https://polyhaven.com/a/poly_wool_herringbone |
+| Кожа | Leather White | Rob Tuytel | CC0 1.0 | https://polyhaven.com/a/leather_white |
+
+Скрипт `tools/build_fabric_textures.py` уменьшает карты до 512 px и сохраняет в
+`frontend/public/textures/fabric-*.jpg` (около 400 КБ на все ткани). Для сборки нужен
+Pillow (MIT-CMU, https://github.com/python-pillow/Pillow) — только инструмент разработчика,
+в приложение не входит.
 
 ## Бэкенд (Python)
 

@@ -7,13 +7,9 @@ import { useEffect, useMemo } from 'react'
 import {
   BufferAttribute,
   BufferGeometry,
-  DataTexture,
   DoubleSide,
-  LinearFilter,
-  LinearMipmapLinearFilter,
   PMREMGenerator,
-  RepeatWrapping,
-  RGBAFormat,
+  Vector2,
   type Texture,
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -27,13 +23,8 @@ import type { HumanModel } from '../avatar/humanModel'
 import { humanBodyModel } from '../avatar/humanSections'
 import { buildBodyModel, type BodyModel } from '../avatar/sections'
 import { MANNEQUIN_HEX, hexToRgb, srgbToLinear } from './colors'
-import {
-  FABRIC_LOOK,
-  FABRIC_TEXTURE_SIZE,
-  fabricBumpMap,
-  fabricFor,
-  type FabricKind,
-} from './fabric'
+import { FABRIC_LOOK, fabricFor, roughnessFactor, type FabricKind } from './fabric'
+import { useFabricBump, useFabricMaps, type FabricMaps } from './fabricMaps'
 import type { ColorMode } from './garment'
 import { buildOutfit, type SceneGarment } from './layers'
 import { bodyMeshes, garmentMeshes } from './scene'
@@ -65,25 +56,6 @@ function useGeometry(data: MeshData): BufferGeometry {
   return geometry
 }
 
-/** Фактура ткани для выбранной категории. */
-function useFabricTexture(kind: FabricKind): Texture {
-  const texture = useMemo(() => {
-    const size = FABRIC_TEXTURE_SIZE
-    const result = new DataTexture(fabricBumpMap(kind, size), size, size, RGBAFormat)
-    result.wrapS = RepeatWrapping
-    result.wrapT = RepeatWrapping
-    result.repeat.set(FABRIC_LOOK[kind].repeatAround, 1)
-    // Мипмапы убирают муар фактуры на удалении камеры.
-    result.generateMipmaps = true
-    result.minFilter = LinearMipmapLinearFilter
-    result.magFilter = LinearFilter
-    result.needsUpdate = true
-    return result
-  }, [kind])
-  useEffect(() => () => texture.dispose(), [texture])
-  return texture
-}
-
 /** Матовый манекен, как в витрине магазина. */
 function BodyMesh({ data }: { data: MeshData }) {
   const geometry = useGeometry(data)
@@ -94,23 +66,43 @@ function BodyMesh({ data }: { data: MeshData }) {
   )
 }
 
-/** Ткань: отблеск ворса (sheen), у кожи — лаковый слой, и рельеф переплетения. */
-function GarmentMesh({ data, kind, bump }: { data: MeshData; kind: FabricKind; bump: Texture }) {
+/** Свойства ткани, общие для деталей одной вещи: карты-сканы или процедурный рельеф. */
+interface FabricSurface {
+  kind: FabricKind
+  maps: FabricMaps | null
+  bump: Texture
+}
+
+/**
+ * Ткань: отблеск ворса (sheen), у кожи — лаковый слой. Рельеф и матовость берутся из
+ * карт-сканов; пока их нет — процедурный рельеф и ровная шероховатость.
+ */
+function GarmentMesh({ data, surface }: { data: MeshData; surface: FabricSurface }) {
   const geometry = useGeometry(data)
-  const look = FABRIC_LOOK[kind]
+  const look = FABRIC_LOOK[surface.kind]
+  const { maps } = surface
+  const normalScale = useMemo(
+    () => new Vector2(look.normalStrength, look.normalStrength),
+    [look.normalStrength],
+  )
   return (
     <mesh geometry={geometry} castShadow receiveShadow>
       <meshPhysicalMaterial
+        // Новый материал при смене набора карт: шейдеру нужно пересобраться.
+        key={maps ? 'scanned' : 'procedural'}
         vertexColors
         side={DoubleSide}
-        roughness={look.roughness}
+        roughness={maps ? roughnessFactor(look) : look.roughness}
+        roughnessMap={maps?.rough ?? null}
+        normalMap={maps?.normal ?? null}
+        normalScale={normalScale}
+        bumpMap={maps ? null : surface.bump}
+        bumpScale={look.bumpScale}
         sheen={look.sheen}
         sheenRoughness={look.sheenRoughness}
         sheenColor="#ffffff"
         clearcoat={look.clearcoat}
         clearcoatRoughness={look.clearcoatRoughness}
-        bumpMap={bump}
-        bumpScale={look.bumpScale}
       />
     </mesh>
   )
@@ -119,11 +111,13 @@ function GarmentMesh({ data, kind, bump }: { data: MeshData; kind: FabricKind; b
 /** Все детали одной вещи с тканью по её названию или категории. */
 function GarmentGroup({ parts, garment }: { parts: MeshData[]; garment: SceneGarment }) {
   const kind = fabricFor(garment.category, garment.title)
-  const bump = useFabricTexture(kind)
+  const maps = useFabricMaps(kind)
+  const bump = useFabricBump(kind)
+  const surface = useMemo(() => ({ kind, maps, bump }), [kind, maps, bump])
   return (
     <>
       {parts.map((data, index) => (
-        <GarmentMesh key={index} data={data} kind={kind} bump={bump} />
+        <GarmentMesh key={index} data={data} surface={surface} />
       ))}
     </>
   )
@@ -137,7 +131,7 @@ function CameraControls({ targetY }: { targetY: number }) {
     const controls = new OrbitControls(camera, canvas)
     controls.target.set(0, targetY, 0)
     controls.enablePan = false
-    controls.minDistance = 1.2
+    controls.minDistance = 0.6
     controls.maxDistance = 4
     controls.maxPolarAngle = Math.PI * 0.55
     controls.update()
