@@ -27,7 +27,7 @@ import { FABRIC_LOOK, fabricFor, roughnessFactor, type FabricKind } from './fabr
 import { useFabricBump, useFabricMaps, type FabricMaps } from './fabricMaps'
 import type { ColorMode } from './garment'
 import { buildOutfit, type SceneGarment } from './layers'
-import { bodyMeshes, garmentMeshes } from './scene'
+import { bodyMeshes, garmentSceneData, type GarmentSceneData } from './scene'
 
 /** Сантиметры модели → метры сцены. */
 const CM_TO_M = 0.01
@@ -108,17 +108,35 @@ function GarmentMesh({ data, surface }: { data: MeshData; surface: FabricSurface
   )
 }
 
-/** Все детали одной вещи с тканью по её названию или категории. */
-function GarmentGroup({ parts, garment }: { parts: MeshData[]; garment: SceneGarment }) {
+/** Швы и строчка: матовые нитки, чуть «впереди» ткани по глубине, чтобы не мерцать. */
+function TrimMesh({ data }: { data: MeshData }) {
+  const geometry = useGeometry(data)
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial
+        vertexColors
+        side={DoubleSide}
+        roughness={0.85}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
+      />
+    </mesh>
+  )
+}
+
+/** Все детали одной вещи с тканью по её названию или категории, плюс швы и строчка. */
+function GarmentGroup({ data, garment }: { data: GarmentSceneData; garment: SceneGarment }) {
   const kind = fabricFor(garment.category, garment.title)
   const maps = useFabricMaps(kind)
   const bump = useFabricBump(kind)
   const surface = useMemo(() => ({ kind, maps, bump }), [kind, maps, bump])
   return (
     <>
-      {parts.map((data, index) => (
-        <GarmentMesh key={index} data={data} surface={surface} />
+      {data.meshes.map((mesh, index) => (
+        <GarmentMesh key={index} data={mesh} surface={surface} />
       ))}
+      {data.trims.indices.length > 0 && <TrimMesh data={data.trims} />}
     </>
   )
 }
@@ -228,7 +246,11 @@ export default function FittingScene(props: FittingSceneProps) {
     [measurements, human.data],
   )
   const garmentData = useMemo(
-    () => buildOutfit(body, garments, colorMode).map((parts) => garmentMeshes(parts)),
+    () =>
+      buildOutfit(body, garments, colorMode).map((parts, index) => {
+        const garment = garments[index] as SceneGarment
+        return garmentSceneData(parts, garment.category, garment.title)
+      }),
     [body, garments, colorMode],
   )
   const heightM = body.heightCm * CM_TO_M
@@ -246,10 +268,10 @@ export default function FittingScene(props: FittingSceneProps) {
         {bodyData.map((data, index) => (
           <BodyMesh key={`body-${index}`} data={data} />
         ))}
-        {garmentData.map((parts, index) => (
+        {garmentData.map((data, index) => (
           <GarmentGroup
             key={`garment-${index}`}
-            parts={parts}
+            data={data}
             garment={garments[index] as SceneGarment}
           />
         ))}
