@@ -109,7 +109,7 @@ export function columnPath(
  * Точка на расстоянии distanceCm от края по поверхности: идём по столбцу от кольца edgeRow
  * внутрь детали (direction +1 — вверх, −1 — вниз) и считаем пройденную длину.
  */
-function pointFromEdge(
+export function pointFromEdge(
   mesh: MeshData,
   layout: GridLayout,
   edgeRow: number,
@@ -157,4 +157,36 @@ export function edgePath(
 /** Замкнутая линия по кольцу row: например, пройма — граница рукава и оката над плечом. */
 export function rowPath(mesh: MeshData, layout: GridLayout, row: number): SurfacePoint[] {
   return Array.from({ length: layout.columns }, (_, column) => gridPoint(mesh, layout, row, column))
+}
+
+/** Длина замкнутой линии по точкам, см. */
+export function pathLength(path: SurfacePoint[]): number {
+  let total = 0
+  for (let index = 1; index < path.length; index += 1) {
+    total += length(
+      subtract((path[index] as SurfacePoint).position, (path[index - 1] as SurfacePoint).position),
+    )
+  }
+  return total
+}
+
+/** Длина детали по столбцу column от нижнего края до верхнего, см. */
+export function columnLength(mesh: MeshData, layout: GridLayout, column: number): number {
+  return pathLength(columnPath(mesh, layout, column))
+}
+
+/**
+ * Координаты на детали «от верхнего края»: столбец (дробный, между соседними столбцами
+ * точка смешивается) и расстояние вниз от верхнего края по поверхности.
+ */
+export function pointBelowTop(
+  mesh: MeshData,
+  layout: GridLayout,
+  column: number,
+  distanceCm: number,
+): SurfacePoint {
+  const base = Math.floor(column)
+  const left = pointFromEdge(mesh, layout, layout.lastRow, -1, base, distanceCm)
+  const right = pointFromEdge(mesh, layout, layout.lastRow, -1, base + 1, distanceCm)
+  return mixPoints(left, right, column - base)
 }

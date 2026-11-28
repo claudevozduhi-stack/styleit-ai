@@ -249,7 +249,7 @@ export default function FittingScene(props: FittingSceneProps) {
     () =>
       buildOutfit(body, garments, colorMode).map((parts, index) => {
         const garment = garments[index] as SceneGarment
-        return garmentSceneData(parts, garment.category, garment.title)
+        return garmentSceneData(parts, garment.category, garment.title, body)
       }),
     [body, garments, colorMode],
   )

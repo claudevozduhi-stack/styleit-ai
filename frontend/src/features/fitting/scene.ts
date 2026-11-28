@@ -5,6 +5,8 @@ import { MANNEQUIN_HEX, hexToRgb } from './colors'
 import type { Category } from '../../types/catalog'
 import { fabricFor } from './fabric'
 import type { GarmentPart } from './garment'
+import { bodyOccluders, shadeGarmentMesh } from './occlusion'
+import { addJeansDetails } from './jeansDetails'
 import { garmentTrims } from './seams'
 
 /** Сетки манекена: голова, туловище, ноги и руки с закрытыми и скруглёнными концами. */
@@ -48,13 +50,22 @@ export interface GarmentSceneData {
   trims: MeshData
 }
 
-/** Сетки деталей вещи и её швов по категории и названию товара (ткань — по названию). */
+/**
+ * Сетки деталей вещи и её швов по категории и названию товара (ткань — по названию).
+ * Если передано тело, ткань мягко затеняется под руками, между ног и в складках.
+ */
 export function garmentSceneData(
   parts: GarmentPart[],
   category: Category,
   title = '',
+  body?: BodyModel,
 ): GarmentSceneData {
-  const meshes = garmentMeshes(parts)
+  const occluders = body ? bodyOccluders(body) : []
+  const meshes = garmentMeshes(parts).map((mesh) => shadeGarmentMesh(mesh, occluders))
   const fabric = fabricFor(category, title)
-  return { meshes, trims: garmentTrims(parts, meshes, fabric, BOTTOM_WEAR.has(category)) }
+  const extras = category === 'jeans' ? addJeansDetails : undefined
+  return {
+    meshes,
+    trims: garmentTrims(parts, meshes, fabric, BOTTOM_WEAR.has(category), extras),
+  }
 }
