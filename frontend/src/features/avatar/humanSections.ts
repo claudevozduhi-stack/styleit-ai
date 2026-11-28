@@ -184,6 +184,7 @@ export function humanBodyModel(model: HumanModel, fitted: FittedHuman): BodyMode
   return {
     heightCm: h,
     landmarks,
+    surface: { positions: p, parts: model.parts, count: model.vertexCount },
     parts: {
       head: part(
         sectionsBetween(p, triangles(PART.head), headLow + 0.2, headHigh - 0.2, LEVELS.head),

@@ -27,7 +27,7 @@ import { FABRIC_LOOK, fabricFor, roughnessFactor, type FabricKind } from './fabr
 import { useFabricBump, useFabricMaps, type FabricMaps } from './fabricMaps'
 import type { ColorMode } from './garment'
 import { buildOutfit, type SceneGarment } from './layers'
-import { bodyMeshes, garmentSceneData, type GarmentSceneData } from './scene'
+import { bodyMeshes, outfitSceneData, type GarmentSceneData } from './scene'
 
 /** Сантиметры модели → метры сцены. */
 const CM_TO_M = 0.01
@@ -247,10 +247,13 @@ export default function FittingScene(props: FittingSceneProps) {
   )
   const garmentData = useMemo(
     () =>
-      buildOutfit(body, garments, colorMode).map((parts, index) => {
-        const garment = garments[index] as SceneGarment
-        return garmentSceneData(parts, garment.category, garment.title, body)
-      }),
+      outfitSceneData(
+        body,
+        buildOutfit(body, garments, colorMode).map((parts, index) => {
+          const garment = garments[index] as SceneGarment
+          return { parts, category: garment.category, title: garment.title }
+        }),
+      ),
     [body, garments, colorMode],
   )
   const heightM = body.heightCm * CM_TO_M

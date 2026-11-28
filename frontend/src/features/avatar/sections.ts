@@ -67,6 +67,16 @@ export interface BodyModel {
   heightCm: number
   parts: Record<PartName, BodyPart>
   landmarks: Landmarks
+  /** Вершины тела-скана (если тело из MakeHuman): по ним одежда проверяется на просвечивание. */
+  surface?: BodySurface
+}
+
+/** Вершины подогнанного тела и номер части тела у каждой (см. PART в humanModel). */
+export interface BodySurface {
+  positions: Float32Array
+  parts: Uint8Array
+  /** Сколько вершин тела (дальше в positions могут идти центры суставов). */
+  count: number
 }
 
 /** Купол макушки в долях радиуса верхнего сечения головы: макушка оказывается на ~99,7 % роста. */
